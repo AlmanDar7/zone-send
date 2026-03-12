@@ -1,9 +1,23 @@
 import { useState } from "react";
-import { Search, RefreshCw, Upload, Plus, MoreHorizontal, Trash2 } from "lucide-react";
+import { Search, RefreshCw, Upload, Plus, MoreHorizontal, Trash2, Link } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import StatusBadge from "@/components/StatusBadge";
 import { motion } from "framer-motion";
@@ -24,13 +38,31 @@ const Contacts = () => {
   const [newName, setNewName] = useState("");
   const [newEmail, setNewEmail] = useState("");
   const [newCompany, setNewCompany] = useState("");
+  const [newCampaignId, setNewCampaignId] = useState("none");
   const [csvImportOpen, setCsvImportOpen] = useState(false);
   const [csvText, setCsvText] = useState("");
+  const [csvCampaignId, setCsvCampaignId] = useState("none");
+  const [linkOpen, setLinkOpen] = useState(false);
+  const [selectedContact, setSelectedContact] = useState<any | null>(null);
+  const [selectedCampaignId, setSelectedCampaignId] = useState("none");
 
   const { data: contacts = [], isLoading } = useQuery({
     queryKey: ["contacts", user?.id],
     queryFn: async () => {
-      const { data, error } = await supabase.from("contacts").select("*, campaigns(name)").order("created_at", { ascending: false });
+      const { data, error } = await supabase
+        .from("contacts")
+        .select("*, campaigns(name)")
+        .order("created_at", { ascending: false });
+      if (error) throw error;
+      return data;
+    },
+    enabled: !!user,
+  });
+
+  const { data: campaigns = [] } = useQuery({
+    queryKey: ["campaign-options", user?.id],
+    queryFn: async () => {
+      const { data, error } = await supabase.from("campaigns").select("id, name").order("created_at", { ascending: false });
       if (error) throw error;
       return data;
     },
@@ -44,6 +76,7 @@ const Contacts = () => {
         name: newName,
         email: newEmail,
         company_name: newCompany || null,
+        campaign_id: newCampaignId === "none" ? null : newCampaignId,
       });
       if (error) throw error;
     },
@@ -53,7 +86,26 @@ const Contacts = () => {
       setNewName("");
       setNewEmail("");
       setNewCompany("");
+      setNewCampaignId("none");
       toast.success("Contact added!");
+    },
+    onError: (err: any) => toast.error(err.message),
+  });
+
+  const linkContactCampaign = useMutation({
+    mutationFn: async ({ contactId, campaignId }: { contactId: string; campaignId: string }) => {
+      const { error } = await supabase
+        .from("contacts")
+        .update({ campaign_id: campaignId === "none" ? null : campaignId })
+        .eq("id", contactId);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["contacts"] });
+      setLinkOpen(false);
+      setSelectedContact(null);
+      setSelectedCampaignId("none");
+      toast.success("Contact campaign updated!");
     },
     onError: (err: any) => toast.error(err.message),
   });
@@ -72,10 +124,19 @@ const Contacts = () => {
   const importCsv = useMutation({
     mutationFn: async () => {
       const lines = csvText.trim().split("\n");
-      const rows = lines.slice(1).map((line) => {
-        const parts = line.split(",").map((p) => p.trim());
-        return { user_id: user!.id, name: parts[0] || "", email: parts[1] || "", company_name: parts[2] || null };
-      }).filter((r) => r.email);
+      const rows = lines
+        .slice(1)
+        .map((line) => {
+          const parts = line.split(",").map((p) => p.trim());
+          return {
+            user_id: user!.id,
+            name: parts[0] || "",
+            email: parts[1] || "",
+            company_name: parts[2] || null,
+            campaign_id: csvCampaignId === "none" ? null : csvCampaignId,
+          };
+        })
+        .filter((r) => r.email);
       if (rows.length === 0) throw new Error("No valid rows found");
       const { error } = await supabase.from("contacts").insert(rows);
       if (error) throw error;
@@ -85,6 +146,7 @@ const Contacts = () => {
       queryClient.invalidateQueries({ queryKey: ["contacts"] });
       setCsvImportOpen(false);
       setCsvText("");
+      setCsvCampaignId("none");
       toast.success(`Imported ${count} contacts!`);
     },
     onError: (err: any) => toast.error(err.message),
@@ -109,6 +171,57 @@ const Contacts = () => {
 
   return (
     <div className="space-y-6">
+      <Dialog
+        open={linkOpen}
+        onOpenChange={(open) => {
+          setLinkOpen(open);
+          if (!open) {
+            setSelectedContact(null);
+            setSelectedCampaignId("none");
+          }
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="font-display">Assign Campaign</DialogTitle>
+            <DialogDescription>
+              Link this contact to a campaign so it can enter that sequence.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            {selectedContact && (
+              <p className="text-sm text-muted-foreground">
+                {selectedContact.name} · {selectedContact.email}
+              </p>
+            )}
+            <div className="space-y-2">
+              <Label>Campaign</Label>
+              <Select value={selectedCampaignId} onValueChange={setSelectedCampaignId}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select campaign" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">No campaign</SelectItem>
+                  {campaigns.map((campaign: any) => (
+                    <SelectItem key={campaign.id} value={campaign.id}>
+                      {campaign.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <Button
+              onClick={() =>
+                selectedContact && linkContactCampaign.mutate({ contactId: selectedContact.id, campaignId: selectedCampaignId })
+              }
+              disabled={!selectedContact || linkContactCampaign.isPending}
+            >
+              {linkContactCampaign.isPending ? "Saving..." : "Save Campaign"}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-display font-bold text-foreground">Contacts</h1>
@@ -121,17 +234,37 @@ const Contacts = () => {
               <Button variant="outline" size="sm"><Upload className="w-4 h-4 mr-2" />Import CSV</Button>
             </DialogTrigger>
             <DialogContent>
-              <DialogHeader><DialogTitle className="font-display">Import CSV</DialogTitle></DialogHeader>
-              <p className="text-sm text-muted-foreground">Paste CSV with columns: Name, Email, Company (optional)</p>
-              <textarea
-                className="w-full h-40 p-3 rounded-lg border border-input bg-background text-sm font-mono resize-none"
-                placeholder={"Name,Email,Company\nJohn Doe,john@example.com,Acme Inc"}
-                value={csvText}
-                onChange={(e) => setCsvText(e.target.value)}
-              />
-              <Button onClick={() => importCsv.mutate()} disabled={importCsv.isPending}>
-                {importCsv.isPending ? "Importing..." : "Import"}
-              </Button>
+              <DialogHeader>
+                <DialogTitle className="font-display">Import CSV</DialogTitle>
+                <DialogDescription>Paste CSV with columns: Name, Email, Company (optional).</DialogDescription>
+              </DialogHeader>
+              <div className="space-y-4">
+                <div className="space-y-2">
+                  <Label>Assign imported contacts to campaign (optional)</Label>
+                  <Select value={csvCampaignId} onValueChange={setCsvCampaignId}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select campaign" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">No campaign</SelectItem>
+                      {campaigns.map((campaign: any) => (
+                        <SelectItem key={campaign.id} value={campaign.id}>
+                          {campaign.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <textarea
+                  className="w-full h-40 p-3 rounded-lg border border-input bg-background text-sm font-mono resize-none"
+                  placeholder={"Name,Email,Company\nJohn Doe,john@example.com,Acme Inc"}
+                  value={csvText}
+                  onChange={(e) => setCsvText(e.target.value)}
+                />
+                <Button onClick={() => importCsv.mutate()} disabled={importCsv.isPending}>
+                  {importCsv.isPending ? "Importing..." : "Import"}
+                </Button>
+              </div>
             </DialogContent>
           </Dialog>
           <Dialog open={addOpen} onOpenChange={setAddOpen}>
@@ -139,7 +272,10 @@ const Contacts = () => {
               <Button size="sm"><Plus className="w-4 h-4 mr-2" />Add Contact</Button>
             </DialogTrigger>
             <DialogContent>
-              <DialogHeader><DialogTitle className="font-display">Add Contact</DialogTitle></DialogHeader>
+              <DialogHeader>
+                <DialogTitle className="font-display">Add Contact</DialogTitle>
+                <DialogDescription>Add contact details and optionally link to a campaign now.</DialogDescription>
+              </DialogHeader>
               <div className="space-y-4">
                 <div className="space-y-2">
                   <Label>Name</Label>
@@ -152,6 +288,22 @@ const Contacts = () => {
                 <div className="space-y-2">
                   <Label>Company (optional)</Label>
                   <Input placeholder="Acme Inc" value={newCompany} onChange={(e) => setNewCompany(e.target.value)} />
+                </div>
+                <div className="space-y-2">
+                  <Label>Campaign (optional)</Label>
+                  <Select value={newCampaignId} onValueChange={setNewCampaignId}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select campaign" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">No campaign</SelectItem>
+                      {campaigns.map((campaign: any) => (
+                        <SelectItem key={campaign.id} value={campaign.id}>
+                          {campaign.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
                 <Button onClick={() => addContact.mutate()} disabled={addContact.isPending || !newName || !newEmail}>
                   {addContact.isPending ? "Adding..." : "Add Contact"}
@@ -184,6 +336,7 @@ const Contacts = () => {
               <th className="text-left py-3 px-5 text-muted-foreground font-medium">Name</th>
               <th className="text-left py-3 px-5 text-muted-foreground font-medium">Email</th>
               <th className="text-left py-3 px-5 text-muted-foreground font-medium">Status</th>
+              <th className="text-left py-3 px-5 text-muted-foreground font-medium">Campaign</th>
               <th className="text-left py-3 px-5 text-muted-foreground font-medium">Company</th>
               <th className="text-left py-3 px-5 text-muted-foreground font-medium">Source</th>
               <th className="py-3 px-5"></th>
@@ -191,14 +344,15 @@ const Contacts = () => {
           </thead>
           <tbody>
             {isLoading ? (
-              <tr><td colSpan={6} className="py-8 text-center text-muted-foreground">Loading...</td></tr>
+              <tr><td colSpan={7} className="py-8 text-center text-muted-foreground">Loading...</td></tr>
             ) : filtered.length === 0 ? (
-              <tr><td colSpan={6} className="py-8 text-center text-muted-foreground">No contacts found</td></tr>
+              <tr><td colSpan={7} className="py-8 text-center text-muted-foreground">No contacts found</td></tr>
             ) : filtered.map((c: any) => (
               <tr key={c.id} className="border-b border-border/50 hover:bg-muted/30 transition-colors">
                 <td className="py-3 px-5 font-medium text-foreground">{c.name}</td>
                 <td className="py-3 px-5 text-muted-foreground">{c.email}</td>
                 <td className="py-3 px-5"><StatusBadge status={c.status as ContactStatus} /></td>
+                <td className="py-3 px-5 text-muted-foreground">{c.campaigns?.name || "Unassigned"}</td>
                 <td className="py-3 px-5 text-muted-foreground">{c.company_name || "—"}</td>
                 <td className="py-3 px-5 text-muted-foreground capitalize">{c.source}</td>
                 <td className="py-3 px-5">
@@ -207,6 +361,15 @@ const Contacts = () => {
                       <button className="p-1 rounded hover:bg-muted transition-colors"><MoreHorizontal className="w-4 h-4 text-muted-foreground" /></button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end">
+                      <DropdownMenuItem
+                        onClick={() => {
+                          setSelectedContact(c);
+                          setSelectedCampaignId(c.campaign_id || "none");
+                          setLinkOpen(true);
+                        }}
+                      >
+                        <Link className="w-4 h-4 mr-2" />Assign campaign
+                      </DropdownMenuItem>
                       <DropdownMenuItem onClick={() => deleteContact.mutate(c.id)} className="text-destructive">
                         <Trash2 className="w-4 h-4 mr-2" />Delete
                       </DropdownMenuItem>
