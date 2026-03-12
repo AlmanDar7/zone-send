@@ -14,7 +14,353 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      campaign_steps: {
+        Row: {
+          campaign_id: string
+          created_at: string
+          delay_days: number
+          id: string
+          step_number: number
+          template_id: string | null
+        }
+        Insert: {
+          campaign_id: string
+          created_at?: string
+          delay_days?: number
+          id?: string
+          step_number: number
+          template_id?: string | null
+        }
+        Update: {
+          campaign_id?: string
+          created_at?: string
+          delay_days?: number
+          id?: string
+          step_number?: number
+          template_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "campaign_steps_campaign_id_fkey"
+            columns: ["campaign_id"]
+            isOneToOne: false
+            referencedRelation: "campaigns"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "campaign_steps_template_id_fkey"
+            columns: ["template_id"]
+            isOneToOne: false
+            referencedRelation: "email_templates"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      campaigns: {
+        Row: {
+          created_at: string
+          daily_limit: number
+          id: string
+          name: string
+          status: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          daily_limit?: number
+          id?: string
+          name: string
+          status?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          daily_limit?: number
+          id?: string
+          name?: string
+          status?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      contacts: {
+        Row: {
+          bounce_reason: string | null
+          campaign_id: string | null
+          company_name: string | null
+          created_at: string
+          date_added: string
+          email: string
+          id: string
+          name: string
+          reply_date: string | null
+          source: string | null
+          status: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          bounce_reason?: string | null
+          campaign_id?: string | null
+          company_name?: string | null
+          created_at?: string
+          date_added?: string
+          email: string
+          id?: string
+          name: string
+          reply_date?: string | null
+          source?: string | null
+          status?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          bounce_reason?: string | null
+          campaign_id?: string | null
+          company_name?: string | null
+          created_at?: string
+          date_added?: string
+          email?: string
+          id?: string
+          name?: string
+          reply_date?: string | null
+          source?: string | null
+          status?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "contacts_campaign_id_fkey"
+            columns: ["campaign_id"]
+            isOneToOne: false
+            referencedRelation: "campaigns"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      email_queue: {
+        Row: {
+          campaign_id: string
+          contact_id: string
+          created_at: string
+          error_message: string | null
+          id: string
+          scheduled_at: string
+          sent_at: string | null
+          status: string
+          step_number: number
+          user_id: string
+        }
+        Insert: {
+          campaign_id: string
+          contact_id: string
+          created_at?: string
+          error_message?: string | null
+          id?: string
+          scheduled_at: string
+          sent_at?: string | null
+          status?: string
+          step_number?: number
+          user_id: string
+        }
+        Update: {
+          campaign_id?: string
+          contact_id?: string
+          created_at?: string
+          error_message?: string | null
+          id?: string
+          scheduled_at?: string
+          sent_at?: string | null
+          status?: string
+          step_number?: number
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "email_queue_campaign_id_fkey"
+            columns: ["campaign_id"]
+            isOneToOne: false
+            referencedRelation: "campaigns"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "email_queue_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: false
+            referencedRelation: "contacts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      email_templates: {
+        Row: {
+          body: string
+          created_at: string
+          id: string
+          name: string
+          subject: string
+          type: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          body: string
+          created_at?: string
+          id?: string
+          name: string
+          subject: string
+          type?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          body?: string
+          created_at?: string
+          id?: string
+          name?: string
+          subject?: string
+          type?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      google_sheet_settings: {
+        Row: {
+          created_at: string
+          id: string
+          last_synced_at: string | null
+          service_account_json: string | null
+          sheet_id: string | null
+          sheet_url: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          last_synced_at?: string | null
+          service_account_json?: string | null
+          sheet_id?: string | null
+          sheet_url?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          last_synced_at?: string | null
+          service_account_json?: string | null
+          sheet_id?: string | null
+          sheet_url?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      profiles: {
+        Row: {
+          avatar_url: string | null
+          created_at: string
+          full_name: string | null
+          id: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          avatar_url?: string | null
+          created_at?: string
+          full_name?: string | null
+          id?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          avatar_url?: string | null
+          created_at?: string
+          full_name?: string | null
+          id?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      sending_limits: {
+        Row: {
+          created_at: string
+          id: string
+          last_reset_date: string
+          max_per_day: number
+          sent_today: number
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          last_reset_date?: string
+          max_per_day?: number
+          sent_today?: number
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          last_reset_date?: string
+          max_per_day?: number
+          sent_today?: number
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      smtp_settings: {
+        Row: {
+          created_at: string
+          from_email: string | null
+          from_name: string | null
+          host: string
+          id: string
+          password: string
+          port: number
+          updated_at: string
+          use_ssl: boolean
+          user_id: string
+          username: string
+        }
+        Insert: {
+          created_at?: string
+          from_email?: string | null
+          from_name?: string | null
+          host?: string
+          id?: string
+          password?: string
+          port?: number
+          updated_at?: string
+          use_ssl?: boolean
+          user_id: string
+          username?: string
+        }
+        Update: {
+          created_at?: string
+          from_email?: string | null
+          from_name?: string | null
+          host?: string
+          id?: string
+          password?: string
+          port?: number
+          updated_at?: string
+          use_ssl?: boolean
+          user_id?: string
+          username?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
