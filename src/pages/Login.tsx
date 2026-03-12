@@ -1,19 +1,38 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Mail } from "lucide-react";
 import { motion } from "framer-motion";
+import { toast } from "sonner";
 
 const Login = () => {
   const navigate = useNavigate();
+  const { signIn, signUp } = useAuth();
+  const [isSignUp, setIsSignUp] = useState(false);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [fullName, setFullName] = useState("");
+  const [loading, setLoading] = useState(false);
 
-  const handleLogin = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    navigate("/dashboard");
+    setLoading(true);
+    try {
+      if (isSignUp) {
+        await signUp(email, password, fullName);
+        toast.success("Account created! Check your email to confirm.");
+      } else {
+        await signIn(email, password);
+        navigate("/dashboard");
+      }
+    } catch (err: any) {
+      toast.error(err.message || "Authentication failed");
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -35,39 +54,46 @@ const Login = () => {
           </div>
 
           <div>
-            <h2 className="text-2xl font-display font-bold text-foreground">Welcome back</h2>
-            <p className="text-sm text-muted-foreground mt-1">Sign in to manage your campaigns</p>
+            <h2 className="text-2xl font-display font-bold text-foreground">
+              {isSignUp ? "Create account" : "Welcome back"}
+            </h2>
+            <p className="text-sm text-muted-foreground mt-1">
+              {isSignUp ? "Start automating your outreach" : "Sign in to manage your campaigns"}
+            </p>
           </div>
 
-          <form onSubmit={handleLogin} className="space-y-4">
+          <form onSubmit={handleSubmit} className="space-y-4">
+            {isSignUp && (
+              <div className="space-y-2">
+                <Label>Full Name</Label>
+                <Input placeholder="John Doe" value={fullName} onChange={(e) => setFullName(e.target.value)} required />
+              </div>
+            )}
             <div className="space-y-2">
               <Label>Email</Label>
-              <Input
-                type="email"
-                placeholder="you@company.com"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-              />
+              <Input type="email" placeholder="you@company.com" value={email} onChange={(e) => setEmail(e.target.value)} required />
             </div>
             <div className="space-y-2">
               <Label>Password</Label>
-              <Input
-                type="password"
-                placeholder="••••••••"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-              />
+              <Input type="password" placeholder="••••••••" value={password} onChange={(e) => setPassword(e.target.value)} required minLength={6} />
             </div>
-            <Button type="submit" className="w-full">Sign In</Button>
+            <Button type="submit" className="w-full" disabled={loading}>
+              {loading ? "Please wait..." : isSignUp ? "Create Account" : "Sign In"}
+            </Button>
           </form>
+
+          <p className="text-sm text-center text-muted-foreground">
+            {isSignUp ? "Already have an account?" : "Don't have an account?"}{" "}
+            <button onClick={() => setIsSignUp(!isSignUp)} className="text-primary font-medium hover:underline">
+              {isSignUp ? "Sign in" : "Sign up"}
+            </button>
+          </p>
         </motion.div>
       </div>
 
       <div className="hidden lg:flex flex-1 items-center justify-center bg-primary/5 border-l border-border">
         <div className="max-w-md text-center space-y-4 p-8">
-          <h3 className="text-2xl font-display font-bold text-foreground">
-            Automate your outreach
-          </h3>
+          <h3 className="text-2xl font-display font-bold text-foreground">Automate your outreach</h3>
           <p className="text-muted-foreground">
             Send personalized cold emails, automate follow-ups, detect replies, and manage contacts — all from one dashboard.
           </p>

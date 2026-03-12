@@ -1,0 +1,13 @@
+project_id = "gklclznwdhvohaedsfxi"
+
+[functions.send-email]
+verify_jwt = false
+
+[functions.sync-google-sheets]
+verify_jwt = false
+
+[functions.process-email-queue]
+verify_jwt = false
+
+[functions.check-replies]
+verify_jwt = false
