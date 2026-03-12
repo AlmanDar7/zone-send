@@ -1,33 +1,91 @@
-import { Users, Send, Mail, MessageSquare, AlertTriangle, TrendingUp } from "lucide-react";
-import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar } from "recharts";
+import { useAuth } from "@/contexts/AuthContext";
+import { supabase } from "@/integrations/supabase/client";
+import { useQuery } from "@tanstack/react-query";
+import { Users, Send, Mail, MessageSquare } from "lucide-react";
+import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 import StatCard from "@/components/StatCard";
 import { motion } from "framer-motion";
 
-const emailData = [
-  { date: "Mon", sent: 120, replies: 8 },
-  { date: "Tue", sent: 145, replies: 12 },
-  { date: "Wed", sent: 98, replies: 6 },
-  { date: "Thu", sent: 200, replies: 18 },
-  { date: "Fri", sent: 178, replies: 14 },
-  { date: "Sat", sent: 50, replies: 4 },
-  { date: "Sun", sent: 30, replies: 2 },
-];
-
-const campaignData = [
-  { name: "SaaS Outreach", sent: 1240, replies: 89, rate: 7.2 },
-  { name: "Agency Leads", sent: 860, replies: 52, rate: 6.0 },
-  { name: "E-commerce", sent: 540, replies: 41, rate: 7.6 },
-];
-
-const recentActivity = [
-  { type: "reply", contact: "Sarah Chen", time: "2 min ago", detail: "Replied to SaaS Outreach" },
-  { type: "sent", contact: "Mike Johnson", time: "5 min ago", detail: "Follow-up 2 sent" },
-  { type: "bounce", contact: "old@invalid.com", time: "12 min ago", detail: "Hard bounce detected" },
-  { type: "reply", contact: "David Kim", time: "18 min ago", detail: "Replied to Agency Leads" },
-  { type: "sent", contact: "Lisa Wang", time: "25 min ago", detail: "Initial email sent" },
-];
-
 const Dashboard = () => {
+  const { user } = useAuth();
+
+  const { data: contacts } = useQuery({
+    queryKey: ["contacts-count", user?.id],
+    queryFn: async () => {
+      const { count } = await supabase.from("contacts").select("*", { count: "exact", head: true });
+      return count || 0;
+    },
+    enabled: !!user,
+  });
+
+  const { data: campaigns } = useQuery({
+    queryKey: ["campaigns-active", user?.id],
+    queryFn: async () => {
+      const { data } = await supabase.from("campaigns").select("*").eq("status", "Running");
+      return data || [];
+    },
+    enabled: !!user,
+  });
+
+  const { data: emailsSentToday } = useQuery({
+    queryKey: ["emails-sent-today", user?.id],
+    queryFn: async () => {
+      const today = new Date().toISOString().split("T")[0];
+      const { count } = await supabase
+        .from("email_queue")
+        .select("*", { count: "exact", head: true })
+        .eq("status", "sent")
+        .gte("sent_at", today);
+      return count || 0;
+    },
+    enabled: !!user,
+  });
+
+  const { data: replies } = useQuery({
+    queryKey: ["replies-count", user?.id],
+    queryFn: async () => {
+      const { count } = await supabase
+        .from("contacts")
+        .select("*", { count: "exact", head: true })
+        .eq("status", "Replied");
+      return count || 0;
+    },
+    enabled: !!user,
+  });
+
+  const { data: recentContacts } = useQuery({
+    queryKey: ["recent-contacts", user?.id],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from("contacts")
+        .select("*")
+        .order("updated_at", { ascending: false })
+        .limit(5);
+      return data || [];
+    },
+    enabled: !!user,
+  });
+
+  const { data: campaignList } = useQuery({
+    queryKey: ["campaigns-list", user?.id],
+    queryFn: async () => {
+      const { data } = await supabase.from("campaigns").select("*").order("created_at", { ascending: false }).limit(5);
+      return data || [];
+    },
+    enabled: !!user,
+  });
+
+  // Mock chart data (would come from aggregated email_queue data in production)
+  const emailData = [
+    { date: "Mon", sent: 0, replies: 0 },
+    { date: "Tue", sent: 0, replies: 0 },
+    { date: "Wed", sent: 0, replies: 0 },
+    { date: "Thu", sent: 0, replies: 0 },
+    { date: "Fri", sent: 0, replies: 0 },
+    { date: "Sat", sent: 0, replies: 0 },
+    { date: "Sun", sent: 0, replies: 0 },
+  ];
+
   return (
     <div className="space-y-8">
       <div>
@@ -36,10 +94,10 @@ const Dashboard = () => {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5">
-        <StatCard icon={Users} title="Total Contacts" value="4,832" change="+124 this week" changeType="positive" />
-        <StatCard icon={Send} title="Active Campaigns" value="3" change="2 sending now" changeType="neutral" />
-        <StatCard icon={Mail} title="Emails Sent Today" value="342" change="+18% vs yesterday" changeType="positive" />
-        <StatCard icon={MessageSquare} title="Total Replies" value="182" change="7.2% reply rate" changeType="positive" />
+        <StatCard icon={Users} title="Total Contacts" value={contacts?.toLocaleString() || "0"} />
+        <StatCard icon={Send} title="Active Campaigns" value={campaigns?.length || 0} />
+        <StatCard icon={Mail} title="Emails Sent Today" value={emailsSentToday || 0} />
+        <StatCard icon={MessageSquare} title="Total Replies" value={replies || 0} />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
@@ -49,16 +107,16 @@ const Dashboard = () => {
             <AreaChart data={emailData}>
               <defs>
                 <linearGradient id="sentGrad" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor="hsl(168 80% 36%)" stopOpacity={0.3} />
-                  <stop offset="100%" stopColor="hsl(168 80% 36%)" stopOpacity={0} />
+                  <stop offset="0%" stopColor="hsl(168, 80%, 36%)" stopOpacity={0.3} />
+                  <stop offset="100%" stopColor="hsl(168, 80%, 36%)" stopOpacity={0} />
                 </linearGradient>
               </defs>
-              <CartesianGrid strokeDasharray="3 3" stroke="hsl(220 13% 91%)" />
-              <XAxis dataKey="date" tick={{ fontSize: 12, fill: "hsl(220 9% 46%)" }} />
-              <YAxis tick={{ fontSize: 12, fill: "hsl(220 9% 46%)" }} />
+              <CartesianGrid strokeDasharray="3 3" stroke="hsl(220, 13%, 91%)" />
+              <XAxis dataKey="date" tick={{ fontSize: 12, fill: "hsl(220, 9%, 46%)" }} />
+              <YAxis tick={{ fontSize: 12, fill: "hsl(220, 9%, 46%)" }} />
               <Tooltip />
-              <Area type="monotone" dataKey="sent" stroke="hsl(168 80% 36%)" fill="url(#sentGrad)" strokeWidth={2} />
-              <Area type="monotone" dataKey="replies" stroke="hsl(210 92% 55%)" fill="transparent" strokeWidth={2} strokeDasharray="4 4" />
+              <Area type="monotone" dataKey="sent" stroke="hsl(168, 80%, 36%)" fill="url(#sentGrad)" strokeWidth={2} />
+              <Area type="monotone" dataKey="replies" stroke="hsl(210, 92%, 55%)" fill="transparent" strokeWidth={2} strokeDasharray="4 4" />
             </AreaChart>
           </ResponsiveContainer>
         </motion.div>
@@ -66,47 +124,57 @@ const Dashboard = () => {
         <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 }} className="stat-card !p-5">
           <h3 className="font-display font-semibold text-foreground mb-4">Recent Activity</h3>
           <div className="space-y-3">
-            {recentActivity.map((item, i) => (
-              <div key={i} className="flex items-start gap-3">
+            {recentContacts && recentContacts.length > 0 ? recentContacts.map((c) => (
+              <div key={c.id} className="flex items-start gap-3">
                 <div className={`w-2 h-2 rounded-full mt-1.5 shrink-0 ${
-                  item.type === "reply" ? "bg-success" : item.type === "bounce" ? "bg-destructive" : "bg-primary"
+                  c.status === "Replied" ? "bg-success" : c.status === "Bounced" ? "bg-destructive" : "bg-primary"
                 }`} />
                 <div className="min-w-0">
-                  <p className="text-sm font-medium text-foreground truncate">{item.contact}</p>
-                  <p className="text-xs text-muted-foreground">{item.detail} · {item.time}</p>
+                  <p className="text-sm font-medium text-foreground truncate">{c.name}</p>
+                  <p className="text-xs text-muted-foreground">{c.status} · {c.email}</p>
                 </div>
               </div>
-            ))}
+            )) : (
+              <p className="text-sm text-muted-foreground">No contacts yet. Add contacts to get started.</p>
+            )}
           </div>
         </motion.div>
       </div>
 
       <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }} className="stat-card !p-5">
-        <h3 className="font-display font-semibold text-foreground mb-4">Campaign Performance</h3>
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-border">
-                <th className="text-left py-3 px-4 text-muted-foreground font-medium">Campaign</th>
-                <th className="text-right py-3 px-4 text-muted-foreground font-medium">Sent</th>
-                <th className="text-right py-3 px-4 text-muted-foreground font-medium">Replies</th>
-                <th className="text-right py-3 px-4 text-muted-foreground font-medium">Reply Rate</th>
-              </tr>
-            </thead>
-            <tbody>
-              {campaignData.map((c) => (
-                <tr key={c.name} className="border-b border-border/50 hover:bg-muted/50 transition-colors">
-                  <td className="py-3 px-4 font-medium text-foreground">{c.name}</td>
-                  <td className="py-3 px-4 text-right text-muted-foreground">{c.sent.toLocaleString()}</td>
-                  <td className="py-3 px-4 text-right text-muted-foreground">{c.replies}</td>
-                  <td className="py-3 px-4 text-right">
-                    <span className="text-success font-medium">{c.rate}%</span>
-                  </td>
+        <h3 className="font-display font-semibold text-foreground mb-4">Campaigns</h3>
+        {campaignList && campaignList.length > 0 ? (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-border">
+                  <th className="text-left py-3 px-4 text-muted-foreground font-medium">Campaign</th>
+                  <th className="text-left py-3 px-4 text-muted-foreground font-medium">Status</th>
+                  <th className="text-right py-3 px-4 text-muted-foreground font-medium">Daily Limit</th>
+                  <th className="text-right py-3 px-4 text-muted-foreground font-medium">Created</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+              </thead>
+              <tbody>
+                {campaignList.map((c) => (
+                  <tr key={c.id} className="border-b border-border/50 hover:bg-muted/50 transition-colors">
+                    <td className="py-3 px-4 font-medium text-foreground">{c.name}</td>
+                    <td className="py-3 px-4">
+                      <span className={`px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                        c.status === "Running" ? "bg-success/10 text-success" :
+                        c.status === "Paused" ? "bg-warning/10 text-warning" :
+                        "bg-muted text-muted-foreground"
+                      }`}>{c.status}</span>
+                    </td>
+                    <td className="py-3 px-4 text-right text-muted-foreground">{c.daily_limit}</td>
+                    <td className="py-3 px-4 text-right text-muted-foreground">{new Date(c.created_at).toLocaleDateString()}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <p className="text-sm text-muted-foreground">No campaigns yet. Create one to start sending emails.</p>
+        )}
       </motion.div>
     </div>
   );

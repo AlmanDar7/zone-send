@@ -2,59 +2,123 @@ import { useState } from "react";
 import { Plus, Copy, Trash2, Eye, Edit3 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { motion } from "framer-motion";
-
-interface EmailTemplate {
-  id: number;
-  name: string;
-  subject: string;
-  body: string;
-  type: "Initial" | "Follow-up 1" | "Follow-up 2" | "Follow-up 3" | "Final";
-  updatedAt: string;
-}
-
-const mockTemplates: EmailTemplate[] = [
-  {
-    id: 1,
-    name: "SaaS Introduction",
-    subject: "Quick question about {{CompanyName}}",
-    body: "Hi {{FirstName}},\n\nI noticed that {{CompanyName}} is growing fast. I'd love to show you how our platform can help scale your outreach.\n\nWould you be open to a quick 15-min call this week?\n\nBest,\nAlex",
-    type: "Initial",
-    updatedAt: "2026-03-10",
-  },
-  {
-    id: 2,
-    name: "Gentle Nudge",
-    subject: "Re: Quick question about {{CompanyName}}",
-    body: "Hi {{FirstName}},\n\nJust wanted to bump this to the top of your inbox. I think there's a real fit here.\n\nHappy to work around your schedule.\n\nBest,\nAlex",
-    type: "Follow-up 1",
-    updatedAt: "2026-03-09",
-  },
-  {
-    id: 3,
-    name: "Value Add",
-    subject: "Re: Quick question about {{CompanyName}}",
-    body: "Hi {{FirstName}},\n\nI put together a quick case study that might be relevant to {{CompanyName}}. Companies in your space are seeing 3x improvement in response rates.\n\nWorth a look?\n\nBest,\nAlex",
-    type: "Follow-up 2",
-    updatedAt: "2026-03-08",
-  },
-];
+import { useAuth } from "@/contexts/AuthContext";
+import { supabase } from "@/integrations/supabase/client";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
 
 const variables = ["{{FirstName}}", "{{Email}}", "{{CompanyName}}"];
+const typeColors: Record<string, string> = {
+  Initial: "bg-primary/10 text-primary",
+  "Follow-up 1": "bg-info/10 text-info",
+  "Follow-up 2": "bg-warning/10 text-warning",
+  "Follow-up 3": "bg-destructive/10 text-destructive",
+  Final: "bg-muted text-muted-foreground",
+};
 
 const Templates = () => {
-  const [selectedTemplate, setSelectedTemplate] = useState<EmailTemplate | null>(null);
+  const { user } = useAuth();
+  const queryClient = useQueryClient();
+  const [createOpen, setCreateOpen] = useState(false);
+  const [editOpen, setEditOpen] = useState(false);
   const [previewOpen, setPreviewOpen] = useState(false);
+  const [selectedTemplate, setSelectedTemplate] = useState<any>(null);
+  const [form, setForm] = useState({ name: "", subject: "", body: "", type: "Initial" });
 
-  const typeColors: Record<string, string> = {
-    Initial: "bg-primary/10 text-primary",
-    "Follow-up 1": "bg-info/10 text-info",
-    "Follow-up 2": "bg-warning/10 text-warning",
-    "Follow-up 3": "bg-destructive/10 text-destructive",
-    Final: "bg-muted text-muted-foreground",
-  };
+  const { data: templates = [], isLoading } = useQuery({
+    queryKey: ["templates", user?.id],
+    queryFn: async () => {
+      const { data, error } = await supabase.from("email_templates").select("*").order("created_at", { ascending: false });
+      if (error) throw error;
+      return data;
+    },
+    enabled: !!user,
+  });
+
+  const createTemplate = useMutation({
+    mutationFn: async () => {
+      const { error } = await supabase.from("email_templates").insert({ user_id: user!.id, ...form });
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["templates"] });
+      setCreateOpen(false);
+      setForm({ name: "", subject: "", body: "", type: "Initial" });
+      toast.success("Template created!");
+    },
+    onError: (err: any) => toast.error(err.message),
+  });
+
+  const updateTemplate = useMutation({
+    mutationFn: async () => {
+      const { error } = await supabase.from("email_templates").update(form).eq("id", selectedTemplate.id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["templates"] });
+      setEditOpen(false);
+      toast.success("Template updated!");
+    },
+    onError: (err: any) => toast.error(err.message),
+  });
+
+  const duplicateTemplate = useMutation({
+    mutationFn: async (t: any) => {
+      const { error } = await supabase.from("email_templates").insert({
+        user_id: user!.id, name: `${t.name} (Copy)`, subject: t.subject, body: t.body, type: t.type,
+      });
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["templates"] });
+      toast.success("Template duplicated!");
+    },
+  });
+
+  const deleteTemplate = useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase.from("email_templates").delete().eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["templates"] });
+      toast.success("Template deleted");
+    },
+  });
+
+  const renderPreview = (text: string) =>
+    text.replace(/\{\{(\w+)\}\}/g, (_, v) => {
+      const map: Record<string, string> = { FirstName: "Sarah", Email: "sarah@techcorp.com", CompanyName: "TechCorp" };
+      return map[v] || `{{${v}}}`;
+    });
+
+  const TemplateForm = ({ onSubmit, submitLabel, isPending }: { onSubmit: () => void; submitLabel: string; isPending: boolean }) => (
+    <div className="space-y-4">
+      <div className="space-y-2"><Label>Name</Label><Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="SaaS Introduction" /></div>
+      <div className="space-y-2"><Label>Type</Label>
+        <Select value={form.type} onValueChange={(v) => setForm({ ...form, type: v })}>
+          <SelectTrigger><SelectValue /></SelectTrigger>
+          <SelectContent>
+            {["Initial", "Follow-up 1", "Follow-up 2", "Follow-up 3", "Final"].map((t) => <SelectItem key={t} value={t}>{t}</SelectItem>)}
+          </SelectContent>
+        </Select>
+      </div>
+      <div className="space-y-2"><Label>Subject</Label><Input value={form.subject} onChange={(e) => setForm({ ...form, subject: e.target.value })} placeholder="Quick question about {{CompanyName}}" /></div>
+      <div className="space-y-2">
+        <Label>Body</Label>
+        <div className="flex gap-1 mb-1">{variables.map((v) => (
+          <button key={v} onClick={() => setForm({ ...form, body: form.body + v })} className="px-2 py-0.5 rounded bg-primary/5 text-primary text-xs font-mono border border-primary/10 hover:bg-primary/10">{v}</button>
+        ))}</div>
+        <Textarea value={form.body} onChange={(e) => setForm({ ...form, body: e.target.value })} rows={8} placeholder="Hi {{FirstName}}," />
+      </div>
+      <Button onClick={onSubmit} disabled={isPending || !form.name || !form.subject || !form.body}>{isPending ? "Saving..." : submitLabel}</Button>
+    </div>
+  );
 
   return (
     <div className="space-y-6">
@@ -63,89 +127,61 @@ const Templates = () => {
           <h1 className="text-2xl font-display font-bold text-foreground">Templates</h1>
           <p className="text-muted-foreground text-sm mt-1">Create and manage email templates</p>
         </div>
-        <Button size="sm"><Plus className="w-4 h-4 mr-2" />New Template</Button>
+        <Dialog open={createOpen} onOpenChange={setCreateOpen}>
+          <DialogTrigger asChild><Button size="sm"><Plus className="w-4 h-4 mr-2" />New Template</Button></DialogTrigger>
+          <DialogContent className="max-w-lg">
+            <DialogHeader><DialogTitle className="font-display">Create Template</DialogTitle></DialogHeader>
+            <TemplateForm onSubmit={() => createTemplate.mutate()} submitLabel="Create Template" isPending={createTemplate.isPending} />
+          </DialogContent>
+        </Dialog>
       </div>
 
-      <div className="flex gap-2 flex-wrap">
-        <p className="text-xs text-muted-foreground mr-2 self-center">Variables:</p>
-        {variables.map((v) => (
-          <span key={v} className="px-2.5 py-1 rounded-md bg-primary/5 text-primary text-xs font-mono border border-primary/10">
-            {v}
-          </span>
-        ))}
-      </div>
-
-      <div className="grid gap-4">
-        {mockTemplates.map((template, i) => (
-          <motion.div
-            key={template.id}
-            initial={{ opacity: 0, y: 8 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: i * 0.05 }}
-            className="stat-card !p-5"
-          >
-            <div className="flex items-start justify-between">
-              <div className="flex-1">
-                <div className="flex items-center gap-3">
-                  <h3 className="font-display font-semibold text-foreground">{template.name}</h3>
-                  <span className={`px-2.5 py-0.5 rounded-full text-xs font-medium ${typeColors[template.type]}`}>
-                    {template.type}
-                  </span>
+      {isLoading ? (
+        <p className="text-muted-foreground">Loading...</p>
+      ) : templates.length === 0 ? (
+        <div className="stat-card !p-8 text-center">
+          <p className="text-muted-foreground">No templates yet. Create one to use in your campaigns.</p>
+        </div>
+      ) : (
+        <div className="grid gap-4">
+          {templates.map((template: any, i: number) => (
+            <motion.div key={template.id} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.05 }} className="stat-card !p-5">
+              <div className="flex items-start justify-between">
+                <div className="flex-1">
+                  <div className="flex items-center gap-3">
+                    <h3 className="font-display font-semibold text-foreground">{template.name}</h3>
+                    <span className={`px-2.5 py-0.5 rounded-full text-xs font-medium ${typeColors[template.type] || typeColors.Initial}`}>{template.type}</span>
+                  </div>
+                  <p className="text-sm text-muted-foreground mt-1">Subject: <span className="text-foreground">{template.subject}</span></p>
+                  <p className="text-sm text-muted-foreground mt-2 line-clamp-2">{template.body}</p>
                 </div>
-                <p className="text-sm text-muted-foreground mt-1">
-                  Subject: <span className="text-foreground">{template.subject}</span>
-                </p>
-                <p className="text-sm text-muted-foreground mt-2 line-clamp-2">{template.body}</p>
-                <p className="text-xs text-muted-foreground mt-3">Updated {template.updatedAt}</p>
+                <div className="flex items-center gap-1 ml-4">
+                  <Dialog open={previewOpen && selectedTemplate?.id === template.id} onOpenChange={(open) => { setPreviewOpen(open); if (open) setSelectedTemplate(template); }}>
+                    <DialogTrigger asChild><button className="p-2 rounded-lg hover:bg-muted transition-colors"><Eye className="w-4 h-4 text-muted-foreground" /></button></DialogTrigger>
+                    <DialogContent>
+                      <DialogHeader><DialogTitle className="font-display">Preview: {template.name}</DialogTitle></DialogHeader>
+                      <div className="space-y-4 mt-2">
+                        <div><p className="text-xs text-muted-foreground mb-1">Subject</p><p className="text-sm font-medium text-foreground bg-muted/50 p-3 rounded-lg">{renderPreview(template.subject)}</p></div>
+                        <div><p className="text-xs text-muted-foreground mb-1">Body</p><div className="text-sm text-foreground bg-muted/50 p-4 rounded-lg whitespace-pre-wrap">{renderPreview(template.body)}</div></div>
+                      </div>
+                    </DialogContent>
+                  </Dialog>
+                  <button onClick={() => { setSelectedTemplate(template); setForm({ name: template.name, subject: template.subject, body: template.body, type: template.type }); setEditOpen(true); }} className="p-2 rounded-lg hover:bg-muted transition-colors"><Edit3 className="w-4 h-4 text-muted-foreground" /></button>
+                  <button onClick={() => duplicateTemplate.mutate(template)} className="p-2 rounded-lg hover:bg-muted transition-colors"><Copy className="w-4 h-4 text-muted-foreground" /></button>
+                  <button onClick={() => deleteTemplate.mutate(template.id)} className="p-2 rounded-lg hover:bg-muted transition-colors"><Trash2 className="w-4 h-4 text-muted-foreground" /></button>
+                </div>
               </div>
+            </motion.div>
+          ))}
+        </div>
+      )}
 
-              <div className="flex items-center gap-1 ml-4">
-                <Dialog open={previewOpen && selectedTemplate?.id === template.id} onOpenChange={(open) => { setPreviewOpen(open); if (open) setSelectedTemplate(template); }}>
-                  <DialogTrigger asChild>
-                    <button className="p-2 rounded-lg hover:bg-muted transition-colors" title="Preview">
-                      <Eye className="w-4 h-4 text-muted-foreground" />
-                    </button>
-                  </DialogTrigger>
-                  <DialogContent>
-                    <DialogHeader>
-                      <DialogTitle className="font-display">Preview: {template.name}</DialogTitle>
-                    </DialogHeader>
-                    <div className="space-y-4 mt-2">
-                      <div>
-                        <p className="text-xs text-muted-foreground mb-1">Subject</p>
-                        <p className="text-sm font-medium text-foreground bg-muted/50 p-3 rounded-lg">
-                          {template.subject.replace(/\{\{(\w+)\}\}/g, (_, v) => {
-                            const map: Record<string, string> = { FirstName: "Sarah", Email: "sarah@techcorp.com", CompanyName: "TechCorp" };
-                            return map[v] || `{{${v}}}`;
-                          })}
-                        </p>
-                      </div>
-                      <div>
-                        <p className="text-xs text-muted-foreground mb-1">Body</p>
-                        <div className="text-sm text-foreground bg-muted/50 p-4 rounded-lg whitespace-pre-wrap">
-                          {template.body.replace(/\{\{(\w+)\}\}/g, (_, v) => {
-                            const map: Record<string, string> = { FirstName: "Sarah", Email: "sarah@techcorp.com", CompanyName: "TechCorp" };
-                            return map[v] || `{{${v}}}`;
-                          })}
-                        </div>
-                      </div>
-                    </div>
-                  </DialogContent>
-                </Dialog>
-                <button className="p-2 rounded-lg hover:bg-muted transition-colors" title="Edit">
-                  <Edit3 className="w-4 h-4 text-muted-foreground" />
-                </button>
-                <button className="p-2 rounded-lg hover:bg-muted transition-colors" title="Duplicate">
-                  <Copy className="w-4 h-4 text-muted-foreground" />
-                </button>
-                <button className="p-2 rounded-lg hover:bg-muted transition-colors" title="Delete">
-                  <Trash2 className="w-4 h-4 text-muted-foreground" />
-                </button>
-              </div>
-            </div>
-          </motion.div>
-        ))}
-      </div>
+      <Dialog open={editOpen} onOpenChange={setEditOpen}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader><DialogTitle className="font-display">Edit Template</DialogTitle></DialogHeader>
+          <TemplateForm onSubmit={() => updateTemplate.mutate()} submitLabel="Save Changes" isPending={updateTemplate.isPending} />
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
