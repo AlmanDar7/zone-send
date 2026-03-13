@@ -97,24 +97,26 @@ const Templates = () => {
       return map[v] || `{{${v}}}`;
     });
 
-  const TemplateForm = ({ onSubmit, submitLabel, isPending }: { onSubmit: () => void; submitLabel: string; isPending: boolean }) => (
+  const insertVariable = (v: string) => setForm((prev) => ({ ...prev, body: prev.body + v }));
+
+  const renderForm = (onSubmit: () => void, submitLabel: string, isPending: boolean) => (
     <div className="space-y-4">
-      <div className="space-y-2"><Label>Name</Label><Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="SaaS Introduction" /></div>
+      <div className="space-y-2"><Label>Name</Label><Input value={form.name} onChange={(e) => setForm((prev) => ({ ...prev, name: e.target.value }))} placeholder="SaaS Introduction" /></div>
       <div className="space-y-2"><Label>Type</Label>
-        <Select value={form.type} onValueChange={(v) => setForm({ ...form, type: v })}>
+        <Select value={form.type} onValueChange={(v) => setForm((prev) => ({ ...prev, type: v }))}>
           <SelectTrigger><SelectValue /></SelectTrigger>
           <SelectContent>
             {["Initial", "Follow-up 1", "Follow-up 2", "Follow-up 3", "Final"].map((t) => <SelectItem key={t} value={t}>{t}</SelectItem>)}
           </SelectContent>
         </Select>
       </div>
-      <div className="space-y-2"><Label>Subject</Label><Input value={form.subject} onChange={(e) => setForm({ ...form, subject: e.target.value })} placeholder="Quick question about {{CompanyName}}" /></div>
+      <div className="space-y-2"><Label>Subject</Label><Input value={form.subject} onChange={(e) => setForm((prev) => ({ ...prev, subject: e.target.value }))} placeholder="Quick question about {{CompanyName}}" /></div>
       <div className="space-y-2">
         <Label>Body</Label>
         <div className="flex gap-1 mb-1">{variables.map((v) => (
-          <button key={v} onClick={() => setForm({ ...form, body: form.body + v })} className="px-2 py-0.5 rounded bg-primary/5 text-primary text-xs font-mono border border-primary/10 hover:bg-primary/10">{v}</button>
+          <button key={v} type="button" onClick={() => insertVariable(v)} className="px-2 py-0.5 rounded bg-primary/5 text-primary text-xs font-mono border border-primary/10 hover:bg-primary/10">{v}</button>
         ))}</div>
-        <Textarea value={form.body} onChange={(e) => setForm({ ...form, body: e.target.value })} rows={8} placeholder="Hi {{FirstName}}," />
+        <Textarea value={form.body} onChange={(e) => setForm((prev) => ({ ...prev, body: e.target.value }))} rows={8} placeholder="Hi {{FirstName}}," />
       </div>
       <Button onClick={onSubmit} disabled={isPending || !form.name || !form.subject || !form.body}>{isPending ? "Saving..." : submitLabel}</Button>
     </div>
@@ -131,7 +133,7 @@ const Templates = () => {
           <DialogTrigger asChild><Button size="sm"><Plus className="w-4 h-4 mr-2" />New Template</Button></DialogTrigger>
           <DialogContent className="max-w-lg">
             <DialogHeader><DialogTitle className="font-display">Create Template</DialogTitle></DialogHeader>
-            <TemplateForm onSubmit={() => createTemplate.mutate()} submitLabel="Create Template" isPending={createTemplate.isPending} />
+            {renderForm(() => createTemplate.mutate(), "Create Template", createTemplate.isPending)}
           </DialogContent>
         </Dialog>
       </div>
@@ -179,7 +181,7 @@ const Templates = () => {
       <Dialog open={editOpen} onOpenChange={setEditOpen}>
         <DialogContent className="max-w-lg">
           <DialogHeader><DialogTitle className="font-display">Edit Template</DialogTitle></DialogHeader>
-          <TemplateForm onSubmit={() => updateTemplate.mutate()} submitLabel="Save Changes" isPending={updateTemplate.isPending} />
+          {renderForm(() => updateTemplate.mutate(), "Save Changes", updateTemplate.isPending)}
         </DialogContent>
       </Dialog>
     </div>
