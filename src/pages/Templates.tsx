@@ -133,7 +133,7 @@ const Templates = () => {
           <DialogTrigger asChild><Button size="sm"><Plus className="w-4 h-4 mr-2" />New Template</Button></DialogTrigger>
           <DialogContent className="max-w-lg">
             <DialogHeader><DialogTitle className="font-display">Create Template</DialogTitle></DialogHeader>
-            <TemplateForm onSubmit={() => createTemplate.mutate()} submitLabel="Create Template" isPending={createTemplate.isPending} />
+            {renderForm(() => createTemplate.mutate(), "Create Template", createTemplate.isPending)}
           </DialogContent>
         </Dialog>
       </div>
