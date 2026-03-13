@@ -128,7 +128,8 @@ serve(async (req) => {
 
       for (const email of pendingEmails) {
         const contact = email.contacts as any;
-        const template = (email.campaign_steps as any)?.email_templates;
+        const stepConfig = steps.find((s: any) => s.step_number === email.step_number);
+        const template = (stepConfig as any)?.email_templates;
 
         if (!template || !contact) continue;
 
