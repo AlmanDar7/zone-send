@@ -102,16 +102,20 @@ serve(async (req) => {
       }
 
       // Now process pending emails
-      const { data: pendingEmails } = await supabase
+      const { data: pendingEmails, error: pendingError } = await supabase
         .from("email_queue")
-        .select("*, contacts(*), campaign_steps!inner(*, email_templates(*))")
+        .select("*, contacts(*)")
         .eq("campaign_id", campaign.id)
         .eq("status", "pending")
         .lte("scheduled_at", new Date().toISOString())
         .order("scheduled_at")
         .limit(maxPerDay);
 
-      if (!pendingEmails) continue;
+      if (pendingError) {
+        console.error("Failed to load pending emails:", pendingError.message);
+        continue;
+      }
+      if (!pendingEmails || pendingEmails.length === 0) continue;
 
       // Get SMTP settings
       const { data: smtp } = await supabase
@@ -124,7 +128,8 @@ serve(async (req) => {
 
       for (const email of pendingEmails) {
         const contact = email.contacts as any;
-        const template = (email.campaign_steps as any)?.email_templates;
+        const stepConfig = steps.find((s: any) => s.step_number === email.step_number);
+        const template = (stepConfig as any)?.email_templates;
 
         if (!template || !contact) continue;
 
