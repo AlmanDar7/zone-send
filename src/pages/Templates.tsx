@@ -181,7 +181,7 @@ const Templates = () => {
       <Dialog open={editOpen} onOpenChange={setEditOpen}>
         <DialogContent className="max-w-lg">
           <DialogHeader><DialogTitle className="font-display">Edit Template</DialogTitle></DialogHeader>
-          <TemplateForm onSubmit={() => updateTemplate.mutate()} submitLabel="Save Changes" isPending={updateTemplate.isPending} />
+          {renderForm(() => updateTemplate.mutate(), "Save Changes", updateTemplate.isPending)}
         </DialogContent>
       </Dialog>
     </div>
