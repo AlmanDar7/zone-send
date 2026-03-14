@@ -127,6 +127,37 @@ const Contacts = () => {
     },
   });
 
+  const bulkDelete = useMutation({
+    mutationFn: async (ids: string[]) => {
+      const { error } = await supabase.from("contacts").delete().in("id", ids);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["contacts"] });
+      setSelectedIds(new Set());
+      toast.success(`Deleted ${selectedIds.size} contacts`);
+    },
+    onError: (err: any) => toast.error(err.message),
+  });
+
+  const bulkAssign = useMutation({
+    mutationFn: async ({ ids, campaignId }: { ids: string[]; campaignId: string }) => {
+      const { error } = await supabase
+        .from("contacts")
+        .update({ campaign_id: campaignId === "none" ? null : campaignId })
+        .in("id", ids);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["contacts"] });
+      setSelectedIds(new Set());
+      setBulkAssignOpen(false);
+      setBulkCampaignId("none");
+      toast.success(`Updated ${selectedIds.size} contacts`);
+    },
+    onError: (err: any) => toast.error(err.message),
+  });
+
   const importCsv = useMutation({
     mutationFn: async () => {
       const lines = csvText.trim().split("\n");
