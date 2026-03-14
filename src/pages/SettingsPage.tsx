@@ -16,6 +16,7 @@ const SettingsPage = () => {
   const queryClient = useQueryClient();
 
   const [smtp, setSmtp] = useState({ host: "premium26.web-hosting.com", port: "465", username: "", password: "", from_name: "", from_email: "", use_ssl: true });
+  const [showPassword, setShowPassword] = useState(false);
   const [sheet, setSheet] = useState({ sheet_url: "", service_account_json: "" });
   const [limit, setLimit] = useState("500");
 
