@@ -48,6 +48,9 @@ const Contacts = () => {
   const [linkOpen, setLinkOpen] = useState(false);
   const [selectedContact, setSelectedContact] = useState<any | null>(null);
   const [selectedCampaignId, setSelectedCampaignId] = useState("none");
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [bulkAssignOpen, setBulkAssignOpen] = useState(false);
+  const [bulkCampaignId, setBulkCampaignId] = useState("none");
 
   const { data: contacts = [], isLoading } = useQuery({
     queryKey: ["contacts", user?.id],
