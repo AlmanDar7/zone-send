@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { Search, RefreshCw, Upload, Plus, MoreHorizontal, Trash2, Link } from "lucide-react";
+import { useState, useRef } from "react";
+import { Search, RefreshCw, Upload, Plus, MoreHorizontal, Trash2, Link, FileSpreadsheet } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -25,6 +25,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
+import * as XLSX from "xlsx";
 
 type ContactStatus = "Active" | "Replied" | "Bounced" | "Unsubscribed" | "Completed";
 const statusFilters: ("All" | ContactStatus)[] = ["All", "Active", "Replied", "Bounced", "Unsubscribed", "Completed"];
