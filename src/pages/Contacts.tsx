@@ -43,6 +43,8 @@ const Contacts = () => {
   const [csvImportOpen, setCsvImportOpen] = useState(false);
   const [csvText, setCsvText] = useState("");
   const [csvCampaignId, setCsvCampaignId] = useState("none");
+  const [excelCampaignId, setExcelCampaignId] = useState("none");
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [linkOpen, setLinkOpen] = useState(false);
   const [selectedContact, setSelectedContact] = useState<any | null>(null);
   const [selectedCampaignId, setSelectedCampaignId] = useState("none");
