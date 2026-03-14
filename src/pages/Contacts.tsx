@@ -155,6 +155,45 @@ const Contacts = () => {
     onError: (err: any) => toast.error(err.message),
   });
 
+  const handleExcelUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    try {
+      const data = await file.arrayBuffer();
+      const workbook = XLSX.read(data);
+      const sheet = workbook.Sheets[workbook.SheetNames[0]];
+      const json: any[] = XLSX.utils.sheet_to_json(sheet);
+      
+      const rows = json
+        .map((row) => {
+          const name = row["Name"] || row["name"] || row["NAME"] || "";
+          const email = row["Email"] || row["email"] || row["EMAIL"] || row["E-mail"] || "";
+          return {
+            user_id: user!.id,
+            name: String(name).trim(),
+            email: String(email).trim(),
+            company_name: row["Company"] || row["company"] || null,
+            campaign_id: excelCampaignId === "none" ? null : excelCampaignId,
+            source: "excel",
+          };
+        })
+        .filter((r) => r.email && r.name);
+
+      if (rows.length === 0) {
+        toast.error("No valid rows found. Make sure columns are named 'Name' and 'Email'.");
+        return;
+      }
+      const { error } = await supabase.from("contacts").insert(rows);
+      if (error) throw error;
+      queryClient.invalidateQueries({ queryKey: ["contacts"] });
+      toast.success(`Imported ${rows.length} contacts from Excel!`);
+      setExcelCampaignId("none");
+    } catch (err: any) {
+      toast.error(err.message || "Failed to parse Excel file");
+    }
+    if (fileInputRef.current) fileInputRef.current.value = "";
+  };
+
   const syncGoogleSheets = async () => {
     try {
       const { data, error } = await supabase.functions.invoke("sync-google-sheets");
