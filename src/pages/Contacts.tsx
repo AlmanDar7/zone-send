@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { Search, RefreshCw, Upload, Plus, MoreHorizontal, Trash2, Link } from "lucide-react";
+import { useState, useRef } from "react";
+import { Search, RefreshCw, Upload, Plus, MoreHorizontal, Trash2, Link, FileSpreadsheet } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -25,6 +25,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
+import * as XLSX from "xlsx";
 
 type ContactStatus = "Active" | "Replied" | "Bounced" | "Unsubscribed" | "Completed";
 const statusFilters: ("All" | ContactStatus)[] = ["All", "Active", "Replied", "Bounced", "Unsubscribed", "Completed"];
@@ -42,6 +43,8 @@ const Contacts = () => {
   const [csvImportOpen, setCsvImportOpen] = useState(false);
   const [csvText, setCsvText] = useState("");
   const [csvCampaignId, setCsvCampaignId] = useState("none");
+  const [excelCampaignId, setExcelCampaignId] = useState("none");
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [linkOpen, setLinkOpen] = useState(false);
   const [selectedContact, setSelectedContact] = useState<any | null>(null);
   const [selectedCampaignId, setSelectedCampaignId] = useState("none");
@@ -152,6 +155,45 @@ const Contacts = () => {
     onError: (err: any) => toast.error(err.message),
   });
 
+  const handleExcelUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    try {
+      const data = await file.arrayBuffer();
+      const workbook = XLSX.read(data);
+      const sheet = workbook.Sheets[workbook.SheetNames[0]];
+      const json: any[] = XLSX.utils.sheet_to_json(sheet);
+      
+      const rows = json
+        .map((row) => {
+          const name = row["Name"] || row["name"] || row["NAME"] || "";
+          const email = row["Email"] || row["email"] || row["EMAIL"] || row["E-mail"] || "";
+          return {
+            user_id: user!.id,
+            name: String(name).trim(),
+            email: String(email).trim(),
+            company_name: row["Company"] || row["company"] || null,
+            campaign_id: excelCampaignId === "none" ? null : excelCampaignId,
+            source: "excel",
+          };
+        })
+        .filter((r) => r.email && r.name);
+
+      if (rows.length === 0) {
+        toast.error("No valid rows found. Make sure columns are named 'Name' and 'Email'.");
+        return;
+      }
+      const { error } = await supabase.from("contacts").insert(rows);
+      if (error) throw error;
+      queryClient.invalidateQueries({ queryKey: ["contacts"] });
+      toast.success(`Imported ${rows.length} contacts from Excel!`);
+      setExcelCampaignId("none");
+    } catch (err: any) {
+      toast.error(err.message || "Failed to parse Excel file");
+    }
+    if (fileInputRef.current) fileInputRef.current.value = "";
+  };
+
   const syncGoogleSheets = async () => {
     try {
       const { data, error } = await supabase.functions.invoke("sync-google-sheets");
@@ -229,6 +271,29 @@ const Contacts = () => {
         </div>
         <div className="flex gap-2">
           <Button variant="outline" size="sm" onClick={syncGoogleSheets}><RefreshCw className="w-4 h-4 mr-2" />Sync Sheets</Button>
+          <div className="flex items-center gap-2">
+            <Select value={excelCampaignId} onValueChange={setExcelCampaignId}>
+              <SelectTrigger className="w-[160px] h-8 text-xs">
+                <SelectValue placeholder="Campaign (optional)" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="none">No campaign</SelectItem>
+                {campaigns.map((campaign: any) => (
+                  <SelectItem key={campaign.id} value={campaign.id}>{campaign.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept=".xlsx,.xls,.csv"
+              className="hidden"
+              onChange={handleExcelUpload}
+            />
+            <Button variant="outline" size="sm" onClick={() => fileInputRef.current?.click()}>
+              <FileSpreadsheet className="w-4 h-4 mr-2" />Upload Excel
+            </Button>
+          </div>
           <Dialog open={csvImportOpen} onOpenChange={setCsvImportOpen}>
             <DialogTrigger asChild>
               <Button variant="outline" size="sm"><Upload className="w-4 h-4 mr-2" />Import CSV</Button>
