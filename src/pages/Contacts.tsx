@@ -271,6 +271,29 @@ const Contacts = () => {
         </div>
         <div className="flex gap-2">
           <Button variant="outline" size="sm" onClick={syncGoogleSheets}><RefreshCw className="w-4 h-4 mr-2" />Sync Sheets</Button>
+          <div className="flex items-center gap-2">
+            <Select value={excelCampaignId} onValueChange={setExcelCampaignId}>
+              <SelectTrigger className="w-[160px] h-8 text-xs">
+                <SelectValue placeholder="Campaign (optional)" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="none">No campaign</SelectItem>
+                {campaigns.map((campaign: any) => (
+                  <SelectItem key={campaign.id} value={campaign.id}>{campaign.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept=".xlsx,.xls,.csv"
+              className="hidden"
+              onChange={handleExcelUpload}
+            />
+            <Button variant="outline" size="sm" onClick={() => fileInputRef.current?.click()}>
+              <FileSpreadsheet className="w-4 h-4 mr-2" />Upload Excel
+            </Button>
+          </div>
           <Dialog open={csvImportOpen} onOpenChange={setCsvImportOpen}>
             <DialogTrigger asChild>
               <Button variant="outline" size="sm"><Upload className="w-4 h-4 mr-2" />Import CSV</Button>
