@@ -446,10 +446,73 @@ const Contacts = () => {
         </div>
       </div>
 
+      {/* Bulk Action Bar */}
+      {selectedIds.size > 0 && (
+        <motion.div
+          initial={{ opacity: 0, y: -10 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="flex items-center gap-3 p-3 rounded-lg bg-primary/10 border border-primary/20"
+        >
+          <span className="text-sm font-medium text-foreground">
+            {selectedIds.size} selected
+          </span>
+          <Button variant="outline" size="sm" onClick={() => setSelectedIds(new Set())}>
+            <XCircle className="w-4 h-4 mr-1" />Clear
+          </Button>
+          <Dialog open={bulkAssignOpen} onOpenChange={setBulkAssignOpen}>
+            <DialogTrigger asChild>
+              <Button variant="outline" size="sm">
+                <Link className="w-4 h-4 mr-1" />Assign Campaign
+              </Button>
+            </DialogTrigger>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle className="font-display">Bulk Assign Campaign</DialogTitle>
+                <DialogDescription>Assign {selectedIds.size} contacts to a campaign.</DialogDescription>
+              </DialogHeader>
+              <div className="space-y-4">
+                <Select value={bulkCampaignId} onValueChange={setBulkCampaignId}>
+                  <SelectTrigger><SelectValue placeholder="Select campaign" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">No campaign</SelectItem>
+                    {campaigns.map((campaign: any) => (
+                      <SelectItem key={campaign.id} value={campaign.id}>{campaign.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <Button
+                  onClick={() => bulkAssign.mutate({ ids: Array.from(selectedIds), campaignId: bulkCampaignId })}
+                  disabled={bulkAssign.isPending}
+                >
+                  {bulkAssign.isPending ? "Assigning..." : "Assign All"}
+                </Button>
+              </div>
+            </DialogContent>
+          </Dialog>
+          <Button
+            variant="destructive"
+            size="sm"
+            onClick={() => {
+              if (confirm(`Delete ${selectedIds.size} contacts? This cannot be undone.`)) {
+                bulkDelete.mutate(Array.from(selectedIds));
+              }
+            }}
+            disabled={bulkDelete.isPending}
+          >
+            <Trash2 className="w-4 h-4 mr-1" />{bulkDelete.isPending ? "Deleting..." : "Delete All"}
+          </Button>
+        </motion.div>
+      )}
+
       <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="stat-card !p-0 overflow-hidden">
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b border-border bg-muted/30">
+              <th className="py-3 px-3 w-10">
+                <button onClick={toggleSelectAll} className="p-1 rounded hover:bg-muted transition-colors">
+                  {allSelected ? <CheckSquare className="w-4 h-4 text-primary" /> : <Square className="w-4 h-4 text-muted-foreground" />}
+                </button>
+              </th>
               <th className="text-left py-3 px-5 text-muted-foreground font-medium">Name</th>
               <th className="text-left py-3 px-5 text-muted-foreground font-medium">Email</th>
               <th className="text-left py-3 px-5 text-muted-foreground font-medium">Status</th>
@@ -461,11 +524,16 @@ const Contacts = () => {
           </thead>
           <tbody>
             {isLoading ? (
-              <tr><td colSpan={7} className="py-8 text-center text-muted-foreground">Loading...</td></tr>
+              <tr><td colSpan={8} className="py-8 text-center text-muted-foreground">Loading...</td></tr>
             ) : filtered.length === 0 ? (
-              <tr><td colSpan={7} className="py-8 text-center text-muted-foreground">No contacts found</td></tr>
+              <tr><td colSpan={8} className="py-8 text-center text-muted-foreground">No contacts found</td></tr>
             ) : filtered.map((c: any) => (
-              <tr key={c.id} className="border-b border-border/50 hover:bg-muted/30 transition-colors">
+              <tr key={c.id} className={`border-b border-border/50 hover:bg-muted/30 transition-colors ${selectedIds.has(c.id) ? "bg-primary/5" : ""}`}>
+                <td className="py-3 px-3">
+                  <button onClick={() => toggleSelect(c.id)} className="p-1 rounded hover:bg-muted transition-colors">
+                    {selectedIds.has(c.id) ? <CheckSquare className="w-4 h-4 text-primary" /> : <Square className="w-4 h-4 text-muted-foreground" />}
+                  </button>
+                </td>
                 <td className="py-3 px-5 font-medium text-foreground">{c.name}</td>
                 <td className="py-3 px-5 text-muted-foreground">{c.email}</td>
                 <td className="py-3 px-5"><StatusBadge status={c.status as ContactStatus} /></td>
