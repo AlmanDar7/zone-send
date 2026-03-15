@@ -593,6 +593,15 @@ const Contacts = () => {
                       <button className="p-1 rounded hover:bg-muted transition-colors"><MoreHorizontal className="w-4 h-4 text-muted-foreground" /></button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end">
+                      <DropdownMenuItem onClick={() => changeStatus.mutate({ id: c.id, status: "Replied" })}>
+                        <MessageSquare className="w-4 h-4 mr-2" />Mark as Replied
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => changeStatus.mutate({ id: c.id, status: "Active" })}>
+                        <UserCheck className="w-4 h-4 mr-2" />Mark as Active
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => changeStatus.mutate({ id: c.id, status: "Unsubscribed" })}>
+                        <Ban className="w-4 h-4 mr-2" />Mark as Unsubscribed
+                      </DropdownMenuItem>
                       <DropdownMenuItem
                         onClick={() => {
                           setSelectedContact(c);
