@@ -1,5 +1,5 @@
 import { useState, useRef, useMemo } from "react";
-import { Search, RefreshCw, Upload, Plus, MoreHorizontal, Trash2, Link, FileSpreadsheet, CheckSquare, Square, XCircle, MessageSquare, UserCheck, UserX, Ban } from "lucide-react";
+import { Search, RefreshCw, Upload, Plus, MoreHorizontal, Trash2, Link, FileSpreadsheet, CheckSquare, Square, XCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -153,44 +153,6 @@ const Contacts = () => {
       setSelectedIds(new Set());
       setBulkAssignOpen(false);
       setBulkCampaignId("none");
-      toast.success(`Updated ${selectedIds.size} contacts`);
-    },
-    onError: (err: any) => toast.error(err.message),
-  });
-
-  const changeStatus = useMutation({
-    mutationFn: async ({ id, status }: { id: string; status: string }) => {
-      const updates: any = { status, reply_date: status === "Replied" ? new Date().toISOString() : null };
-      const { error } = await supabase.from("contacts").update(updates).eq("id", id);
-      if (error) throw error;
-      // Cancel pending emails when marked as Replied
-      if (status === "Replied") {
-        await supabase.from("email_queue").update({ status: "cancelled" }).eq("contact_id", id).eq("status", "pending");
-      }
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["contacts"] });
-      queryClient.invalidateQueries({ queryKey: ["replies-count"] });
-      queryClient.invalidateQueries({ queryKey: ["recent-contacts"] });
-      toast.success("Status updated");
-    },
-    onError: (err: any) => toast.error(err.message),
-  });
-
-  const bulkChangeStatus = useMutation({
-    mutationFn: async ({ ids, status }: { ids: string[]; status: string }) => {
-      const updates: any = { status, reply_date: status === "Replied" ? new Date().toISOString() : null };
-      const { error } = await supabase.from("contacts").update(updates).in("id", ids);
-      if (error) throw error;
-      if (status === "Replied") {
-        await supabase.from("email_queue").update({ status: "cancelled" }).in("contact_id", ids).eq("status", "pending");
-      }
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["contacts"] });
-      queryClient.invalidateQueries({ queryKey: ["replies-count"] });
-      queryClient.invalidateQueries({ queryKey: ["recent-contacts"] });
-      setSelectedIds(new Set());
       toast.success(`Updated ${selectedIds.size} contacts`);
     },
     onError: (err: any) => toast.error(err.message),
@@ -527,15 +489,6 @@ const Contacts = () => {
               </div>
             </DialogContent>
           </Dialog>
-          <Button variant="outline" size="sm" onClick={() => bulkChangeStatus.mutate({ ids: Array.from(selectedIds), status: "Replied" })}>
-            <MessageSquare className="w-4 h-4 mr-1" />Mark Replied
-          </Button>
-          <Button variant="outline" size="sm" onClick={() => bulkChangeStatus.mutate({ ids: Array.from(selectedIds), status: "Active" })}>
-            <UserCheck className="w-4 h-4 mr-1" />Mark Active
-          </Button>
-          <Button variant="outline" size="sm" onClick={() => bulkChangeStatus.mutate({ ids: Array.from(selectedIds), status: "Unsubscribed" })}>
-            <Ban className="w-4 h-4 mr-1" />Unsubscribe
-          </Button>
           <Button
             variant="destructive"
             size="sm"
@@ -593,15 +546,6 @@ const Contacts = () => {
                       <button className="p-1 rounded hover:bg-muted transition-colors"><MoreHorizontal className="w-4 h-4 text-muted-foreground" /></button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end">
-                      <DropdownMenuItem onClick={() => changeStatus.mutate({ id: c.id, status: "Replied" })}>
-                        <MessageSquare className="w-4 h-4 mr-2" />Mark as Replied
-                      </DropdownMenuItem>
-                      <DropdownMenuItem onClick={() => changeStatus.mutate({ id: c.id, status: "Active" })}>
-                        <UserCheck className="w-4 h-4 mr-2" />Mark as Active
-                      </DropdownMenuItem>
-                      <DropdownMenuItem onClick={() => changeStatus.mutate({ id: c.id, status: "Unsubscribed" })}>
-                        <Ban className="w-4 h-4 mr-2" />Mark as Unsubscribed
-                      </DropdownMenuItem>
                       <DropdownMenuItem
                         onClick={() => {
                           setSelectedContact(c);
