@@ -14,7 +14,6 @@ serve(async (req) => {
     const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(supabaseUrl, supabaseKey);
 
-    // Get all users with SMTP settings configured
     const { data: smtpList } = await supabase.from("smtp_settings").select("*");
     if (!smtpList || smtpList.length === 0) {
       return new Response(JSON.stringify({ message: "No SMTP settings configured" }), {
@@ -26,15 +25,11 @@ serve(async (req) => {
 
     for (const smtp of smtpList) {
       try {
-        // Use IMAP to check for replies
-        // Note: Deno doesn't have a native IMAP library, so we'll use a simple approach
-        // Check inbox via IMAP using the configured SMTP credentials
-        // For Namecheap, IMAP is typically on the same host, port 993
-
-        const imapHost = smtp.host; // Usually same as SMTP host
+        const imapHost = smtp.host;
         const imapPort = 993;
 
-        // Connect to IMAP server
+        console.log(`Connecting to IMAP ${imapHost}:${imapPort} for user ${smtp.user_id}`);
+
         const conn = await Deno.connectTls({
           hostname: imapHost,
           port: imapPort,
@@ -42,78 +37,145 @@ serve(async (req) => {
 
         const encoder = new TextEncoder();
         const decoder = new TextDecoder();
-        const buf = new Uint8Array(4096);
 
-        // Helper to send IMAP command and read response
-        const sendCmd = async (cmd: string): Promise<string> => {
-          await conn.write(encoder.encode(cmd + "\r\n"));
-          const n = await conn.read(buf);
-          return decoder.decode(buf.subarray(0, n || 0));
+        // Read full response until we see a tagged response or timeout
+        const readResponse = async (tag?: string): Promise<string> => {
+          let result = "";
+          const buf = new Uint8Array(8192);
+          const deadline = Date.now() + 10000; // 10s timeout
+          
+          while (Date.now() < deadline) {
+            try {
+              // Set a read deadline
+              const n = await conn.read(buf);
+              if (n === null) break;
+              result += decoder.decode(buf.subarray(0, n));
+              
+              // If we have a tag, wait until we see the tagged response
+              if (tag) {
+                if (result.includes(`${tag} OK`) || result.includes(`${tag} NO`) || result.includes(`${tag} BAD`)) {
+                  break;
+                }
+              } else {
+                // For greeting, just read once
+                break;
+              }
+            } catch {
+              break;
+            }
+          }
+          return result;
         };
 
-        // Read greeting
-        await conn.read(buf);
+        const sendCmd = async (tag: string, cmd: string): Promise<string> => {
+          const fullCmd = `${tag} ${cmd}\r\n`;
+          await conn.write(encoder.encode(fullCmd));
+          return await readResponse(tag);
+        };
+
+        // Read server greeting
+        await readResponse();
 
         // Login
-        const loginRes = await sendCmd(`A001 LOGIN ${smtp.username} ${smtp.password}`);
-        if (!loginRes.includes("OK")) {
-          conn.close();
+        const loginRes = await sendCmd("A001", `LOGIN "${smtp.username}" "${smtp.password}"`);
+        if (!loginRes.includes("A001 OK")) {
+          console.error(`IMAP login failed for ${smtp.username}: ${loginRes.substring(0, 200)}`);
+          try { conn.close(); } catch {}
+          continue;
+        }
+        console.log(`IMAP login successful for ${smtp.username}`);
+
+        // Select INBOX
+        const selectRes = await sendCmd("A002", "SELECT INBOX");
+        if (!selectRes.includes("A002 OK")) {
+          console.error(`Failed to select INBOX: ${selectRes.substring(0, 200)}`);
+          try { await sendCmd("A099", "LOGOUT"); conn.close(); } catch {}
           continue;
         }
 
-        // Select INBOX
-        await sendCmd("A002 SELECT INBOX");
+        // Search for unseen emails from the last 2 days
+        const imapDate = getIMAPDate();
+        const searchRes = await sendCmd("A003", `SEARCH UNSEEN SINCE ${imapDate}`);
+        console.log(`Search result: ${searchRes.substring(0, 300)}`);
 
-        // Search for recent unseen emails (last 24 hours)
-        const searchRes = await sendCmd("A003 SEARCH UNSEEN SINCE " + getIMAPDate());
-        const messageIds = searchRes.match(/\d+/g)?.filter((id) => parseInt(id) > 0) || [];
+        // Extract message sequence numbers from SEARCH response
+        // Response format: "* SEARCH 1 2 3\r\nA003 OK ..."
+        const searchLine = searchRes.split("\r\n").find(l => l.startsWith("* SEARCH"));
+        const messageIds: string[] = [];
+        if (searchLine) {
+          const parts = searchLine.replace("* SEARCH", "").trim().split(/\s+/);
+          for (const p of parts) {
+            if (/^\d+$/.test(p) && parseInt(p) > 0) {
+              messageIds.push(p);
+            }
+          }
+        }
 
+        console.log(`Found ${messageIds.length} unseen messages`);
+
+        // Get all active contacts for this user to match against
+        const { data: activeContacts } = await supabase
+          .from("contacts")
+          .select("id, email, campaign_id")
+          .eq("user_id", smtp.user_id)
+          .eq("status", "Active");
+
+        if (!activeContacts || activeContacts.length === 0) {
+          try { await sendCmd("A099", "LOGOUT"); conn.close(); } catch {}
+          continue;
+        }
+
+        // Build email lookup map
+        const contactMap = new Map<string, any>();
+        for (const c of activeContacts) {
+          contactMap.set(c.email.toLowerCase().trim(), c);
+        }
+
+        // Process messages (limit to 50 to avoid timeouts)
+        let fetchTag = 10;
         for (const msgId of messageIds.slice(0, 50)) {
-          // Fetch FROM header
-          const fetchRes = await sendCmd(`A004 FETCH ${msgId} (BODY[HEADER.FIELDS (FROM SUBJECT)])`);
-          
-          // Extract sender email
-          const fromMatch = fetchRes.match(/From:\s*(?:.*<)?([^\s>]+@[^\s>]+)/i);
+          const tag = `A${String(fetchTag++).padStart(3, "0")}`;
+          const fetchRes = await sendCmd(tag, `FETCH ${msgId} (BODY.PEEK[HEADER.FIELDS (FROM SUBJECT)])`);
+
+          // Extract sender email from From header
+          const fromMatch = fetchRes.match(/From:\s*(?:[^<]*<)?([^\s<>]+@[^\s<>]+)/i);
           if (!fromMatch) continue;
 
           const senderEmail = fromMatch[1].toLowerCase().trim();
-
-          // Check if this email is from a contact in an active campaign
-          const { data: contact } = await supabase
-            .from("contacts")
-            .select("*")
-            .eq("user_id", smtp.user_id)
-            .eq("email", senderEmail)
-            .eq("status", "Active")
-            .maybeSingle();
+          const contact = contactMap.get(senderEmail);
 
           if (contact) {
-            // Mark as replied
+            console.log(`Reply detected from ${senderEmail} (contact ${contact.id})`);
+
+            // Update contact status to Replied
             await supabase.from("contacts").update({
               status: "Replied",
               reply_date: new Date().toISOString(),
             }).eq("id", contact.id);
 
-            // Remove pending emails from queue
+            // Cancel pending emails for this contact
             await supabase
               .from("email_queue")
               .update({ status: "cancelled" })
               .eq("contact_id", contact.id)
               .eq("status", "pending");
 
-            // Update Google Sheets if configured
-            await updateGoogleSheetsReply(supabase, smtp.user_id, contact);
-
             totalReplies++;
 
-            // Mark email as seen
-            await sendCmd(`A005 STORE ${msgId} +FLAGS (\\Seen)`);
+            // Mark email as seen in IMAP
+            const storeTag = `A${String(fetchTag++).padStart(3, "0")}`;
+            await sendCmd(storeTag, `STORE ${msgId} +FLAGS (\\Seen)`);
+
+            // Remove from map so we don't double-count
+            contactMap.delete(senderEmail);
           }
         }
 
         // Logout
-        await sendCmd("A006 LOGOUT");
-        conn.close();
+        try { await sendCmd("A098", "LOGOUT"); } catch {}
+        try { conn.close(); } catch {}
+
+        console.log(`Processed ${messageIds.length} messages, found ${totalReplies} replies for user ${smtp.user_id}`);
       } catch (imapError: any) {
         console.error(`IMAP error for user ${smtp.user_id}:`, imapError.message);
       }
@@ -133,61 +195,7 @@ serve(async (req) => {
 
 function getIMAPDate(): string {
   const d = new Date();
-  d.setDate(d.getDate() - 1);
+  d.setDate(d.getDate() - 2); // Check last 2 days
   const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
   return `${d.getDate()}-${months[d.getMonth()]}-${d.getFullYear()}`;
-}
-
-async function updateGoogleSheetsReply(supabase: any, userId: string, contact: any) {
-  try {
-    const { data: settings } = await supabase
-      .from("google_sheet_settings")
-      .select("*")
-      .eq("user_id", userId)
-      .maybeSingle();
-
-    if (!settings?.sheet_id || !settings?.service_account_json) return;
-
-    const serviceAccount = JSON.parse(settings.service_account_json);
-    const now = Math.floor(Date.now() / 1000);
-
-    // Create JWT
-    const header = btoa(JSON.stringify({ alg: "RS256", typ: "JWT" }));
-    const payload = btoa(JSON.stringify({
-      iss: serviceAccount.client_email,
-      scope: "https://www.googleapis.com/auth/spreadsheets",
-      aud: "https://oauth2.googleapis.com/token",
-      exp: now + 3600, iat: now,
-    }));
-
-    const encoder = new TextEncoder();
-    const keyData = serviceAccount.private_key.replace(/-----BEGIN PRIVATE KEY-----|-----END PRIVATE KEY-----|\n/g, "");
-    const binaryKey = Uint8Array.from(atob(keyData), (c) => c.charCodeAt(0));
-    const cryptoKey = await crypto.subtle.importKey("pkcs8", binaryKey, { name: "RSASSA-PKCS1-v1_5", hash: "SHA-256" }, false, ["sign"]);
-    const signatureInput = encoder.encode(`${header}.${payload}`);
-    const signature = await crypto.subtle.sign("RSASSA-PKCS1-v1_5", cryptoKey, signatureInput);
-    const jwt = `${header}.${payload}.${btoa(String.fromCharCode(...new Uint8Array(signature)))}`;
-
-    const tokenRes = await fetch("https://oauth2.googleapis.com/token", {
-      method: "POST",
-      headers: { "Content-Type": "application/x-www-form-urlencoded" },
-      body: `grant_type=urn:ietf:params:oauth:grant-type:jwt-bearer&assertion=${jwt}`,
-    });
-    const tokenData = await tokenRes.json();
-    if (!tokenData.access_token) return;
-
-    // Append to Replied tab
-    await fetch(
-      `https://sheets.googleapis.com/v4/spreadsheets/${settings.sheet_id}/values/Replied!A:D:append?valueInputOption=RAW`,
-      {
-        method: "POST",
-        headers: { Authorization: `Bearer ${tokenData.access_token}`, "Content-Type": "application/json" },
-        body: JSON.stringify({
-          values: [[contact.name, contact.email, new Date().toISOString(), "Auto-detected reply"]],
-        }),
-      }
-    );
-  } catch (e: any) {
-    console.error("Failed to update Google Sheets:", e.message);
-  }
 }
