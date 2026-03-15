@@ -1,7 +1,11 @@
 import { Outlet } from "react-router-dom";
 import AppSidebar from "./AppSidebar";
+import { useReplyChecker } from "@/hooks/useReplyChecker";
 
 const AppLayout = () => {
+  // Automatically check for email replies every 5 minutes
+  useReplyChecker();
+
   return (
     <div className="min-h-screen bg-background">
       <AppSidebar />
