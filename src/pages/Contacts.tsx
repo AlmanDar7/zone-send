@@ -158,45 +158,7 @@ const Contacts = () => {
     onError: (err: any) => toast.error(err.message),
   });
 
-  const changeStatus = useMutation({
-    mutationFn: async ({ id, status }: { id: string; status: string }) => {
-      const updates: any = { status, reply_date: status === "Replied" ? new Date().toISOString() : null };
-      const { error } = await supabase.from("contacts").update(updates).eq("id", id);
-      if (error) throw error;
-      // Cancel pending emails when marked as Replied
-      if (status === "Replied") {
-        await supabase.from("email_queue").update({ status: "cancelled" }).eq("contact_id", id).eq("status", "pending");
-      }
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["contacts"] });
-      queryClient.invalidateQueries({ queryKey: ["replies-count"] });
-      queryClient.invalidateQueries({ queryKey: ["recent-contacts"] });
-      toast.success("Status updated");
-    },
-    onError: (err: any) => toast.error(err.message),
-  });
 
-  const bulkChangeStatus = useMutation({
-    mutationFn: async ({ ids, status }: { ids: string[]; status: string }) => {
-      const updates: any = { status, reply_date: status === "Replied" ? new Date().toISOString() : null };
-      const { error } = await supabase.from("contacts").update(updates).in("id", ids);
-      if (error) throw error;
-      if (status === "Replied") {
-        await supabase.from("email_queue").update({ status: "cancelled" }).in("contact_id", ids).eq("status", "pending");
-      }
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["contacts"] });
-      queryClient.invalidateQueries({ queryKey: ["replies-count"] });
-      queryClient.invalidateQueries({ queryKey: ["recent-contacts"] });
-      setSelectedIds(new Set());
-      toast.success(`Updated ${selectedIds.size} contacts`);
-    },
-    onError: (err: any) => toast.error(err.message),
-  });
-
-  const importCsv = useMutation({
     mutationFn: async () => {
       const lines = csvText.trim().split("\n");
       const rows = lines
