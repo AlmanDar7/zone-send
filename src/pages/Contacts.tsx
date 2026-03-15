@@ -527,6 +527,15 @@ const Contacts = () => {
               </div>
             </DialogContent>
           </Dialog>
+          <Button variant="outline" size="sm" onClick={() => bulkChangeStatus.mutate({ ids: Array.from(selectedIds), status: "Replied" })}>
+            <MessageSquare className="w-4 h-4 mr-1" />Mark Replied
+          </Button>
+          <Button variant="outline" size="sm" onClick={() => bulkChangeStatus.mutate({ ids: Array.from(selectedIds), status: "Active" })}>
+            <UserCheck className="w-4 h-4 mr-1" />Mark Active
+          </Button>
+          <Button variant="outline" size="sm" onClick={() => bulkChangeStatus.mutate({ ids: Array.from(selectedIds), status: "Unsubscribed" })}>
+            <Ban className="w-4 h-4 mr-1" />Unsubscribe
+          </Button>
           <Button
             variant="destructive"
             size="sm"
