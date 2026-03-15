@@ -158,7 +158,7 @@ const Contacts = () => {
     onError: (err: any) => toast.error(err.message),
   });
 
-
+  const importCsv = useMutation({
     mutationFn: async () => {
       const lines = csvText.trim().split("\n");
       const rows = lines
