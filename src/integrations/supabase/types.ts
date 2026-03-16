@@ -86,6 +86,66 @@ export type Database = {
         }
         Relationships: []
       }
+      contact_folder_members: {
+        Row: {
+          contact_id: string
+          created_at: string
+          folder_id: string
+          id: string
+        }
+        Insert: {
+          contact_id: string
+          created_at?: string
+          folder_id: string
+          id?: string
+        }
+        Update: {
+          contact_id?: string
+          created_at?: string
+          folder_id?: string
+          id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "contact_folder_members_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: false
+            referencedRelation: "contacts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "contact_folder_members_folder_id_fkey"
+            columns: ["folder_id"]
+            isOneToOne: false
+            referencedRelation: "contact_folders"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      contact_folders: {
+        Row: {
+          created_at: string
+          id: string
+          name: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          name: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          name?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       contacts: {
         Row: {
           bounce_reason: string | null
