@@ -18,10 +18,9 @@ serve(async (req) => {
   }
 
   try {
-    const supabase = createClient(
-      Deno.env.get("SUPABASE_URL")!,
-      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
-    );
+    const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+    const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+    const supabase = createClient(supabaseUrl, supabaseKey);
 
     // Record the event
     await supabase.from("email_events").insert({
@@ -42,6 +41,34 @@ serve(async (req) => {
       if (queueItem) {
         await supabase.from("email_queue").update({ [col]: (queueItem as any)[col] + 1 }).eq("id", queueId);
       }
+    }
+
+    // Fire webhooks for this event
+    const webhookEventMap: Record<string, string> = {
+      open: "email.opened",
+      click: "email.clicked",
+    };
+    const webhookEvent = webhookEventMap[eventType];
+    if (webhookEvent) {
+      // Fire asynchronously - don't block the tracking response
+      fetch(`${supabaseUrl}/functions/v1/fire-webhooks`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${supabaseKey}`,
+        },
+        body: JSON.stringify({
+          event_type: webhookEvent,
+          user_id: userId,
+          payload: {
+            contact_id: contactId,
+            campaign_id: campaignId,
+            email_queue_id: queueId,
+            link_url: linkUrl,
+            timestamp: new Date().toISOString(),
+          },
+        }),
+      }).catch(() => {}); // Fire and forget
     }
 
     // For opens, return tracking pixel
@@ -65,7 +92,6 @@ serve(async (req) => {
     return new Response("OK");
   } catch (error: any) {
     console.error("Track error:", error.message);
-    // Still redirect on click even if tracking fails
     if (eventType === "click" && linkUrl) {
       return new Response(null, { status: 302, headers: { Location: linkUrl } });
     }
