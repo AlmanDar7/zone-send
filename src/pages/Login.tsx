@@ -36,6 +36,22 @@ const Login = () => {
     }
   };
 
+  const handleForgotPassword = async () => {
+    if (!email) {
+      toast.error("Please enter your email address first");
+      return;
+    }
+    try {
+      const { error } = await supabase.auth.resetPasswordForEmail(email, {
+        redirectTo: `${window.location.origin}/reset-password`,
+      });
+      if (error) throw error;
+      toast.success("Password reset link sent! Check your email.");
+    } catch (err: any) {
+      toast.error(err.message || "Failed to send reset email");
+    }
+  };
+
   return (
     <div className="min-h-screen bg-background flex">
       <div className="flex-1 flex items-center justify-center p-8">
