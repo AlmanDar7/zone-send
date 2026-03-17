@@ -11,6 +11,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
+import AIEmailWriter from "@/components/AIEmailWriter";
 
 const variables = ["{{FirstName}}", "{{Email}}", "{{CompanyName}}"];
 const typeColors: Record<string, string> = {
