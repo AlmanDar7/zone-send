@@ -269,25 +269,6 @@ serve(async (req) => {
               .update({ sent_today: (limits.sent_today || 0) + 1 })
               .eq("user_id", campaign.user_id);
           }
-
-          fetch(`${supabaseUrl}/functions/v1/fire-webhooks`, {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              "Authorization": `Bearer ${supabaseKey}`,
-            },
-            body: JSON.stringify({
-              event_type: "email.sent",
-              user_id: campaign.user_id,
-              payload: {
-                contact_id: contact.id,
-                campaign_id: campaign.id,
-                email: contact.email,
-                subject,
-                variant: (email as any).variant,
-              },
-            }),
-          }).catch(() => {});
         } catch (sendError: any) {
           console.error(`Failed to send queue ${email.id} to ${contact.email}:`, sendError?.message || sendError);
 
