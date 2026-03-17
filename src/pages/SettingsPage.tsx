@@ -164,6 +164,10 @@ const SettingsPage = () => {
         <p className="text-xs text-muted-foreground">Overflow emails will be automatically queued for the next day.</p>
         <Button size="sm" onClick={() => saveLimit.mutate()} disabled={saveLimit.isPending}>{saveLimit.isPending ? "Saving..." : "Save Limits"}</Button>
       </motion.div>
+
+      <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 }} className="stat-card !p-6">
+        <WebhooksManager />
+      </motion.div>
     </div>
   );
 };

@@ -17,3 +17,6 @@ verify_jwt = false
 
 [functions.ai-email-writer]
 verify_jwt = false
+
+[functions.fire-webhooks]
+verify_jwt = false
