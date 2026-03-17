@@ -31,6 +31,7 @@ const stepLabels: Record<number, string> = {
 const Campaigns = () => {
   const { user } = useAuth();
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
   const [createOpen, setCreateOpen] = useState(false);
   const [newName, setNewName] = useState("");
   const [dailyLimit, setDailyLimit] = useState("500");
