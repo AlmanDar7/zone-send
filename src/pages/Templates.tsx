@@ -11,6 +11,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
+import AIEmailWriter from "@/components/AIEmailWriter";
 
 const variables = ["{{FirstName}}", "{{Email}}", "{{CompanyName}}"];
 const typeColors: Record<string, string> = {
@@ -113,9 +114,17 @@ const Templates = () => {
       <div className="space-y-2"><Label>Subject</Label><Input value={form.subject} onChange={(e) => setForm((prev) => ({ ...prev, subject: e.target.value }))} placeholder="Quick question about {{CompanyName}}" /></div>
       <div className="space-y-2">
         <Label>Body</Label>
-        <div className="flex gap-1 mb-1">{variables.map((v) => (
-          <button key={v} type="button" onClick={() => insertVariable(v)} className="px-2 py-0.5 rounded bg-primary/5 text-primary text-xs font-mono border border-primary/10 hover:bg-primary/10">{v}</button>
-        ))}</div>
+        <div className="flex items-center gap-1 mb-1">
+          {variables.map((v) => (
+            <button key={v} type="button" onClick={() => insertVariable(v)} className="px-2 py-0.5 rounded bg-primary/5 text-primary text-xs font-mono border border-primary/10 hover:bg-primary/10">{v}</button>
+          ))}
+          <div className="ml-auto">
+            <AIEmailWriter
+              onInsert={(text) => setForm((prev) => ({ ...prev, body: text }))}
+              onInsertSubject={(text) => setForm((prev) => ({ ...prev, subject: text }))}
+            />
+          </div>
+        </div>
         <Textarea value={form.body} onChange={(e) => setForm((prev) => ({ ...prev, body: e.target.value }))} rows={8} placeholder="Hi {{FirstName}}," />
       </div>
       <Button onClick={onSubmit} disabled={isPending || !form.name || !form.subject || !form.body}>{isPending ? "Saving..." : submitLabel}</Button>

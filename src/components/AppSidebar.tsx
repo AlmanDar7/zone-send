@@ -5,6 +5,7 @@ import {
   Users,
   Send,
   FileText,
+  BarChart3,
   Settings,
   Mail,
   LogOut,
@@ -15,6 +16,7 @@ const navItems = [
   { to: "/contacts", icon: Users, label: "Contacts" },
   { to: "/campaigns", icon: Send, label: "Campaigns" },
   { to: "/templates", icon: FileText, label: "Templates" },
+  { to: "/analytics", icon: BarChart3, label: "Analytics" },
   { to: "/settings", icon: Settings, label: "Settings" },
 ];
 
