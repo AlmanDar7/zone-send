@@ -4,7 +4,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Mail, ArrowRight, Sparkles } from "lucide-react";
+import { Mail } from "lucide-react";
 import { motion } from "framer-motion";
 import { toast } from "sonner";
 
@@ -36,33 +36,28 @@ const Login = () => {
   };
 
   return (
-    <div className="min-h-screen bg-background flex relative overflow-hidden">
-      {/* Ambient glow effects */}
-      <div className="absolute top-[-30%] left-[-10%] w-[600px] h-[600px] rounded-full bg-primary/[0.07] blur-[120px] animate-glow-pulse" />
-      <div className="absolute bottom-[-20%] right-[-10%] w-[500px] h-[500px] rounded-full bg-accent/[0.05] blur-[100px] animate-glow-pulse" style={{ animationDelay: "1.5s" }} />
-      
-      <div className="flex-1 flex items-center justify-center p-8 relative z-10">
+    <div className="min-h-screen bg-background flex">
+      <div className="flex-1 flex items-center justify-center p-8">
         <motion.div
-          initial={{ opacity: 0, y: 20 }}
+          initial={{ opacity: 0, y: 16 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.6, ease: [0.25, 0.46, 0.45, 0.94] }}
           className="w-full max-w-sm space-y-8"
         >
           <div className="flex items-center gap-3">
-            <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-primary to-accent flex items-center justify-center shadow-lg glow-primary">
-              <Mail className="w-6 h-6 text-primary-foreground" />
+            <div className="w-10 h-10 rounded-xl bg-primary flex items-center justify-center">
+              <Mail className="w-5 h-5 text-primary-foreground" />
             </div>
             <div>
-              <h1 className="font-display font-extrabold text-xl text-foreground tracking-tight">TechlyZone</h1>
-              <p className="text-[11px] text-muted-foreground font-medium tracking-widest uppercase">Email Automation</p>
+              <h1 className="font-display font-bold text-xl text-foreground">TechlyZone</h1>
+              <p className="text-xs text-muted-foreground">Email Automation Platform</p>
             </div>
           </div>
 
           <div>
-            <h2 className="text-3xl font-display font-extrabold text-foreground tracking-tight">
+            <h2 className="text-2xl font-display font-bold text-foreground">
               {isSignUp ? "Create account" : "Welcome back"}
             </h2>
-            <p className="text-sm text-muted-foreground mt-2">
+            <p className="text-sm text-muted-foreground mt-1">
               {isSignUp ? "Start automating your outreach" : "Sign in to manage your campaigns"}
             </p>
           </div>
@@ -70,68 +65,53 @@ const Login = () => {
           <form onSubmit={handleSubmit} className="space-y-4">
             {isSignUp && (
               <div className="space-y-2">
-                <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Full Name</Label>
-                <div className="input-glow rounded-xl transition-all">
-                  <Input placeholder="John Doe" value={fullName} onChange={(e) => setFullName(e.target.value)} required className="h-12 bg-card/60 border-white/[0.08] rounded-xl text-foreground placeholder:text-muted-foreground/50" />
-                </div>
+                <Label>Full Name</Label>
+                <Input placeholder="John Doe" value={fullName} onChange={(e) => setFullName(e.target.value)} required />
               </div>
             )}
             <div className="space-y-2">
-              <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Email</Label>
-              <div className="input-glow rounded-xl transition-all">
-                <Input type="email" placeholder="you@company.com" value={email} onChange={(e) => setEmail(e.target.value)} required className="h-12 bg-card/60 border-white/[0.08] rounded-xl text-foreground placeholder:text-muted-foreground/50" />
-              </div>
+              <Label>Email</Label>
+              <Input type="email" placeholder="you@company.com" value={email} onChange={(e) => setEmail(e.target.value)} required />
             </div>
             <div className="space-y-2">
-              <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Password</Label>
-              <div className="input-glow rounded-xl transition-all">
-                <Input type="password" placeholder="••••••••" value={password} onChange={(e) => setPassword(e.target.value)} required minLength={6} className="h-12 bg-card/60 border-white/[0.08] rounded-xl text-foreground placeholder:text-muted-foreground/50" />
-              </div>
+              <Label>Password</Label>
+              <Input type="password" placeholder="••••••••" value={password} onChange={(e) => setPassword(e.target.value)} required minLength={6} />
             </div>
-            <Button type="submit" className="w-full h-12 rounded-xl bg-gradient-to-r from-primary to-primary/80 hover:from-primary/90 hover:to-primary/70 text-primary-foreground font-semibold text-sm shadow-lg glow-primary transition-all duration-300" disabled={loading}>
+            <Button type="submit" className="w-full" disabled={loading}>
               {loading ? "Please wait..." : isSignUp ? "Create Account" : "Sign In"}
-              {!loading && <ArrowRight className="w-4 h-4 ml-2" />}
             </Button>
           </form>
 
           <p className="text-sm text-center text-muted-foreground">
             {isSignUp ? "Already have an account?" : "Don't have an account?"}{" "}
-            <button onClick={() => setIsSignUp(!isSignUp)} className="text-primary font-semibold hover:text-primary/80 transition-colors">
+            <button onClick={() => setIsSignUp(!isSignUp)} className="text-primary font-medium hover:underline">
               {isSignUp ? "Sign in" : "Sign up"}
             </button>
           </p>
         </motion.div>
       </div>
 
-      <div className="hidden lg:flex flex-1 items-center justify-center border-l border-white/[0.06] relative">
-        <div className="absolute inset-0 mesh-gradient opacity-50" />
-        <motion.div 
-          initial={{ opacity: 0, scale: 0.95 }}
-          animate={{ opacity: 1, scale: 1 }}
-          transition={{ duration: 0.8, delay: 0.2 }}
-          className="max-w-md text-center space-y-6 p-8 relative z-10"
-        >
-          <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-primary/10 border border-primary/20 text-primary text-xs font-semibold mb-4">
-            <Sparkles className="w-3.5 h-3.5" />
-            AI-Powered Outreach
-          </div>
-          <h3 className="text-3xl font-display font-extrabold text-foreground tracking-tight leading-tight">Automate your<br />email outreach</h3>
-          <p className="text-muted-foreground text-sm leading-relaxed">
+      <div className="hidden lg:flex flex-1 items-center justify-center bg-primary/5 border-l border-border">
+        <div className="max-w-md text-center space-y-4 p-8">
+          <h3 className="text-2xl font-display font-bold text-foreground">Automate your outreach</h3>
+          <p className="text-muted-foreground">
             Send personalized cold emails, automate follow-ups, detect replies, and manage contacts — all from one dashboard.
           </p>
-          <div className="flex justify-center gap-10 pt-6">
-            {[
-              { val: "7.2%", label: "Reply Rate" },
-              { val: "4,832", label: "Contacts" },
-              { val: "182", label: "Replies" },
-            ].map((stat) => (
-              <div key={stat.label} className="text-center">
-                <p className="text-2xl font-display font-extrabold text-primary tracking-tight">{stat.val}</p>
-                <p className="text-[11px] text-muted-foreground mt-1 font-medium tracking-wider uppercase">{stat.label}</p>
-              </div>
-            ))}
+          <div className="flex justify-center gap-8 pt-4">
+            <div>
+              <p className="text-2xl font-display font-bold text-primary">7.2%</p>
+              <p className="text-xs text-muted-foreground">Avg Reply Rate</p>
+            </div>
+            <div>
+              <p className="text-2xl font-display font-bold text-primary">4,832</p>
+              <p className="text-xs text-muted-foreground">Contacts Reached</p>
+            </div>
+            <div>
+              <p className="text-2xl font-display font-bold text-primary">182</p>
+              <p className="text-xs text-muted-foreground">Replies This Month</p>
+            </div>
           </div>
-        </motion.div>
+        </div>
       </div>
     </div>
   );

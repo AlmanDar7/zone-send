@@ -14,11 +14,11 @@ import { toast } from "sonner";
 
 const variables = ["{{FirstName}}", "{{Email}}", "{{CompanyName}}"];
 const typeColors: Record<string, string> = {
-  Initial: "bg-primary/15 text-primary border border-primary/20",
-  "Follow-up 1": "bg-info/15 text-info border border-info/20",
-  "Follow-up 2": "bg-warning/15 text-warning border border-warning/20",
-  "Follow-up 3": "bg-destructive/15 text-destructive border border-destructive/20",
-  Final: "bg-muted text-muted-foreground border border-white/[0.06]",
+  Initial: "bg-primary/10 text-primary",
+  "Follow-up 1": "bg-info/10 text-info",
+  "Follow-up 2": "bg-warning/10 text-warning",
+  "Follow-up 3": "bg-destructive/10 text-destructive",
+  Final: "bg-muted text-muted-foreground",
 };
 
 const Templates = () => {
@@ -101,49 +101,38 @@ const Templates = () => {
 
   const renderForm = (onSubmit: () => void, submitLabel: string, isPending: boolean) => (
     <div className="space-y-4">
-      <div className="space-y-2">
-        <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Name</Label>
-        <Input value={form.name} onChange={(e) => setForm((prev) => ({ ...prev, name: e.target.value }))} placeholder="SaaS Introduction" className="h-11 bg-white/[0.04] border-white/[0.08] rounded-xl" />
-      </div>
-      <div className="space-y-2">
-        <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Type</Label>
+      <div className="space-y-2"><Label>Name</Label><Input value={form.name} onChange={(e) => setForm((prev) => ({ ...prev, name: e.target.value }))} placeholder="SaaS Introduction" /></div>
+      <div className="space-y-2"><Label>Type</Label>
         <Select value={form.type} onValueChange={(v) => setForm((prev) => ({ ...prev, type: v }))}>
-          <SelectTrigger className="h-11 bg-white/[0.04] border-white/[0.08] rounded-xl"><SelectValue /></SelectTrigger>
-          <SelectContent className="bg-popover/95 backdrop-blur-xl border-white/[0.08]">
+          <SelectTrigger><SelectValue /></SelectTrigger>
+          <SelectContent>
             {["Initial", "Follow-up 1", "Follow-up 2", "Follow-up 3", "Final"].map((t) => <SelectItem key={t} value={t}>{t}</SelectItem>)}
           </SelectContent>
         </Select>
       </div>
+      <div className="space-y-2"><Label>Subject</Label><Input value={form.subject} onChange={(e) => setForm((prev) => ({ ...prev, subject: e.target.value }))} placeholder="Quick question about {{CompanyName}}" /></div>
       <div className="space-y-2">
-        <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Subject</Label>
-        <Input value={form.subject} onChange={(e) => setForm((prev) => ({ ...prev, subject: e.target.value }))} placeholder="Quick question about {{CompanyName}}" className="h-11 bg-white/[0.04] border-white/[0.08] rounded-xl" />
-      </div>
-      <div className="space-y-2">
-        <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Body</Label>
+        <Label>Body</Label>
         <div className="flex gap-1 mb-1">{variables.map((v) => (
-          <button key={v} type="button" onClick={() => insertVariable(v)} className="px-2 py-1 rounded-lg bg-primary/10 text-primary text-[11px] font-mono font-semibold border border-primary/15 hover:bg-primary/20 transition-colors">{v}</button>
+          <button key={v} type="button" onClick={() => insertVariable(v)} className="px-2 py-0.5 rounded bg-primary/5 text-primary text-xs font-mono border border-primary/10 hover:bg-primary/10">{v}</button>
         ))}</div>
-        <Textarea value={form.body} onChange={(e) => setForm((prev) => ({ ...prev, body: e.target.value }))} rows={8} placeholder="Hi {{FirstName}}," className="bg-white/[0.04] border-white/[0.08] rounded-xl" />
+        <Textarea value={form.body} onChange={(e) => setForm((prev) => ({ ...prev, body: e.target.value }))} rows={8} placeholder="Hi {{FirstName}}," />
       </div>
-      <Button onClick={onSubmit} disabled={isPending || !form.name || !form.subject || !form.body} className="w-full h-11 rounded-xl bg-gradient-to-r from-primary to-primary/80">
-        {isPending ? "Saving..." : submitLabel}
-      </Button>
+      <Button onClick={onSubmit} disabled={isPending || !form.name || !form.subject || !form.body}>{isPending ? "Saving..." : submitLabel}</Button>
     </div>
   );
 
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
-          <h1 className="text-3xl font-display font-extrabold text-foreground tracking-tight">Templates</h1>
+        <div>
+          <h1 className="text-2xl font-display font-bold text-foreground">Templates</h1>
           <p className="text-muted-foreground text-sm mt-1">Create and manage email templates</p>
-        </motion.div>
+        </div>
         <Dialog open={createOpen} onOpenChange={setCreateOpen}>
-          <DialogTrigger asChild>
-            <Button size="sm" className="rounded-xl bg-gradient-to-r from-primary to-primary/80 text-primary-foreground glow-primary"><Plus className="w-4 h-4 mr-2" />New Template</Button>
-          </DialogTrigger>
-          <DialogContent className="max-w-lg bg-card/95 backdrop-blur-2xl border-white/[0.08]">
-            <DialogHeader><DialogTitle className="font-display font-bold">Create Template</DialogTitle></DialogHeader>
+          <DialogTrigger asChild><Button size="sm"><Plus className="w-4 h-4 mr-2" />New Template</Button></DialogTrigger>
+          <DialogContent className="max-w-lg">
+            <DialogHeader><DialogTitle className="font-display">Create Template</DialogTitle></DialogHeader>
             {renderForm(() => createTemplate.mutate(), "Create Template", createTemplate.isPending)}
           </DialogContent>
         </Dialog>
@@ -152,39 +141,36 @@ const Templates = () => {
       {isLoading ? (
         <p className="text-muted-foreground">Loading...</p>
       ) : templates.length === 0 ? (
-        <div className="stat-card !p-12 text-center">
+        <div className="stat-card !p-8 text-center">
           <p className="text-muted-foreground">No templates yet. Create one to use in your campaigns.</p>
         </div>
       ) : (
-        <div className="grid gap-3">
+        <div className="grid gap-4">
           {templates.map((template: any, i: number) => (
-            <motion.div key={template.id} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.04 }} className="stat-card !p-5">
+            <motion.div key={template.id} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.05 }} className="stat-card !p-5">
               <div className="flex items-start justify-between">
                 <div className="flex-1">
                   <div className="flex items-center gap-3">
-                    <h3 className="font-display font-bold text-foreground">{template.name}</h3>
-                    <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold tracking-wide uppercase ${typeColors[template.type] || typeColors.Initial}`}>
-                      <span className="w-1.5 h-1.5 rounded-full bg-current opacity-70" />
-                      {template.type}
-                    </span>
+                    <h3 className="font-display font-semibold text-foreground">{template.name}</h3>
+                    <span className={`px-2.5 py-0.5 rounded-full text-xs font-medium ${typeColors[template.type] || typeColors.Initial}`}>{template.type}</span>
                   </div>
-                  <p className="text-sm text-muted-foreground mt-1.5">Subject: <span className="text-foreground font-medium">{template.subject}</span></p>
-                  <p className="text-xs text-muted-foreground mt-2 line-clamp-2 leading-relaxed">{template.body}</p>
+                  <p className="text-sm text-muted-foreground mt-1">Subject: <span className="text-foreground">{template.subject}</span></p>
+                  <p className="text-sm text-muted-foreground mt-2 line-clamp-2">{template.body}</p>
                 </div>
-                <div className="flex items-center gap-0.5 ml-4">
+                <div className="flex items-center gap-1 ml-4">
                   <Dialog open={previewOpen && selectedTemplate?.id === template.id} onOpenChange={(open) => { setPreviewOpen(open); if (open) setSelectedTemplate(template); }}>
-                    <DialogTrigger asChild><button className="p-2 rounded-xl hover:bg-white/[0.06] transition-colors"><Eye className="w-4 h-4 text-muted-foreground" /></button></DialogTrigger>
-                    <DialogContent className="bg-card/95 backdrop-blur-2xl border-white/[0.08]">
-                      <DialogHeader><DialogTitle className="font-display font-bold">Preview: {template.name}</DialogTitle></DialogHeader>
+                    <DialogTrigger asChild><button className="p-2 rounded-lg hover:bg-muted transition-colors"><Eye className="w-4 h-4 text-muted-foreground" /></button></DialogTrigger>
+                    <DialogContent>
+                      <DialogHeader><DialogTitle className="font-display">Preview: {template.name}</DialogTitle></DialogHeader>
                       <div className="space-y-4 mt-2">
-                        <div><p className="text-[10px] text-muted-foreground mb-1 uppercase tracking-wider font-semibold">Subject</p><p className="text-sm font-medium text-foreground bg-white/[0.04] p-3 rounded-xl border border-white/[0.06]">{renderPreview(template.subject)}</p></div>
-                        <div><p className="text-[10px] text-muted-foreground mb-1 uppercase tracking-wider font-semibold">Body</p><div className="text-sm text-foreground bg-white/[0.04] p-4 rounded-xl border border-white/[0.06] whitespace-pre-wrap leading-relaxed">{renderPreview(template.body)}</div></div>
+                        <div><p className="text-xs text-muted-foreground mb-1">Subject</p><p className="text-sm font-medium text-foreground bg-muted/50 p-3 rounded-lg">{renderPreview(template.subject)}</p></div>
+                        <div><p className="text-xs text-muted-foreground mb-1">Body</p><div className="text-sm text-foreground bg-muted/50 p-4 rounded-lg whitespace-pre-wrap">{renderPreview(template.body)}</div></div>
                       </div>
                     </DialogContent>
                   </Dialog>
-                  <button onClick={() => { setSelectedTemplate(template); setForm({ name: template.name, subject: template.subject, body: template.body, type: template.type }); setEditOpen(true); }} className="p-2 rounded-xl hover:bg-white/[0.06] transition-colors"><Edit3 className="w-4 h-4 text-muted-foreground" /></button>
-                  <button onClick={() => duplicateTemplate.mutate(template)} className="p-2 rounded-xl hover:bg-white/[0.06] transition-colors"><Copy className="w-4 h-4 text-muted-foreground" /></button>
-                  <button onClick={() => deleteTemplate.mutate(template.id)} className="p-2 rounded-xl hover:bg-white/[0.06] transition-colors"><Trash2 className="w-4 h-4 text-muted-foreground" /></button>
+                  <button onClick={() => { setSelectedTemplate(template); setForm({ name: template.name, subject: template.subject, body: template.body, type: template.type }); setEditOpen(true); }} className="p-2 rounded-lg hover:bg-muted transition-colors"><Edit3 className="w-4 h-4 text-muted-foreground" /></button>
+                  <button onClick={() => duplicateTemplate.mutate(template)} className="p-2 rounded-lg hover:bg-muted transition-colors"><Copy className="w-4 h-4 text-muted-foreground" /></button>
+                  <button onClick={() => deleteTemplate.mutate(template.id)} className="p-2 rounded-lg hover:bg-muted transition-colors"><Trash2 className="w-4 h-4 text-muted-foreground" /></button>
                 </div>
               </div>
             </motion.div>
@@ -193,8 +179,8 @@ const Templates = () => {
       )}
 
       <Dialog open={editOpen} onOpenChange={setEditOpen}>
-        <DialogContent className="max-w-lg bg-card/95 backdrop-blur-2xl border-white/[0.08]">
-          <DialogHeader><DialogTitle className="font-display font-bold">Edit Template</DialogTitle></DialogHeader>
+        <DialogContent className="max-w-lg">
+          <DialogHeader><DialogTitle className="font-display">Edit Template</DialogTitle></DialogHeader>
           {renderForm(() => updateTemplate.mutate(), "Save Changes", updateTemplate.isPending)}
         </DialogContent>
       </Dialog>

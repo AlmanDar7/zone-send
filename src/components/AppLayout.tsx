@@ -3,15 +3,14 @@ import AppSidebar from "./AppSidebar";
 import { useReplyChecker } from "@/hooks/useReplyChecker";
 
 const AppLayout = () => {
+  // Automatically check for email replies every 5 minutes
   useReplyChecker();
 
   return (
     <div className="min-h-screen bg-background">
       <AppSidebar />
-      <main className="ml-[260px] p-8 min-h-screen">
-        <div className="max-w-[1400px] mx-auto">
-          <Outlet />
-        </div>
+      <main className="ml-64 p-8">
+        <Outlet />
       </main>
     </div>
   );
