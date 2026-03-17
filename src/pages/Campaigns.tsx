@@ -1,5 +1,6 @@
 import { useState } from "react";
-import { Plus, Play, Pause, Square, MoreHorizontal, Trash2, ChevronDown, ChevronUp, Mail } from "lucide-react";
+import { useNavigate } from "react-router-dom";
+import { Plus, Play, Pause, Square, MoreHorizontal, Trash2, ChevronDown, ChevronUp, Mail, BarChart3 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
