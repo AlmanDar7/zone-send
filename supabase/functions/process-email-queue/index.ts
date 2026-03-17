@@ -37,8 +37,10 @@ serve(async (req) => {
     const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(supabaseUrl, supabaseKey);
 
-    const { campaignId } = await req.json().catch(() => ({}));
+    const body = await req.json().catch(() => ({}));
+    const campaignId = body?.campaignId;
 
+    // Auth is optional - cron calls without auth, UI calls with auth
     const authHeader = req.headers.get("Authorization");
     let userId: string | null = null;
     if (authHeader) {

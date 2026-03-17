@@ -1,5 +1,6 @@
 import { useState } from "react";
-import { Plus, Play, Pause, Square, MoreHorizontal, Trash2, ChevronDown, ChevronUp, Mail } from "lucide-react";
+import { useNavigate } from "react-router-dom";
+import { Plus, Play, Pause, Square, MoreHorizontal, Trash2, ChevronDown, ChevronUp, Mail, BarChart3 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -30,6 +31,7 @@ const stepLabels: Record<number, string> = {
 const Campaigns = () => {
   const { user } = useAuth();
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
   const [createOpen, setCreateOpen] = useState(false);
   const [newName, setNewName] = useState("");
   const [dailyLimit, setDailyLimit] = useState("500");
@@ -232,6 +234,9 @@ const Campaigns = () => {
                           <button className="p-2 rounded-lg hover:bg-muted transition-colors"><MoreHorizontal className="w-4 h-4 text-muted-foreground" /></button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
+                          <DropdownMenuItem onClick={() => navigate(`/campaigns/${campaign.id}/report`)}>
+                            <BarChart3 className="w-4 h-4 mr-2" />View Report
+                          </DropdownMenuItem>
                           <DropdownMenuItem onClick={() => deleteCampaign.mutate(campaign.id)} className="text-destructive">
                             <Trash2 className="w-4 h-4 mr-2" />Delete
                           </DropdownMenuItem>

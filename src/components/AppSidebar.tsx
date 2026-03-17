@@ -9,6 +9,7 @@ import {
   Settings,
   Mail,
   LogOut,
+  Inbox,
 } from "lucide-react";
 
 const navItems = [
@@ -16,6 +17,7 @@ const navItems = [
   { to: "/contacts", icon: Users, label: "Contacts" },
   { to: "/campaigns", icon: Send, label: "Campaigns" },
   { to: "/templates", icon: FileText, label: "Templates" },
+  { to: "/email-queue", icon: Inbox, label: "Email Queue" },
   { to: "/analytics", icon: BarChart3, label: "Analytics" },
   { to: "/settings", icon: Settings, label: "Settings" },
 ];
