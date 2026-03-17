@@ -38,7 +38,7 @@ const AppSidebar = () => {
             <Mail className="w-5 h-5 text-primary-foreground" />
           </div>
           <div>
-            <h1 className="text-sidebar-primary-foreground font-display font-bold text-lg leading-tight">TechlyZone</h1>
+            <h1 className="text-sidebar-primary-foreground font-display font-bold text-lg leading-tight">Reachquix</h1>
             <p className="text-sidebar-foreground text-xs">Email Automation</p>
           </div>
         </div>

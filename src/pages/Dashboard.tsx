@@ -1,13 +1,39 @@
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Users, Send, Mail, MessageSquare } from "lucide-react";
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 import StatCard from "@/components/StatCard";
 import { motion } from "framer-motion";
+import { useEffect } from "react";
 
 const Dashboard = () => {
   const { user } = useAuth();
+  const queryClient = useQueryClient();
+
+  // Realtime subscription for dashboard auto-refresh
+  useEffect(() => {
+    if (!user) return;
+    const channel = supabase
+      .channel("dashboard-realtime")
+      .on("postgres_changes", { event: "*", schema: "public", table: "email_events" }, () => {
+        queryClient.invalidateQueries({ queryKey: ["emails-sent-today"] });
+        queryClient.invalidateQueries({ queryKey: ["replies-count"] });
+        queryClient.invalidateQueries({ queryKey: ["dashboard-daily"] });
+        queryClient.invalidateQueries({ queryKey: ["recent-contacts"] });
+      })
+      .on("postgres_changes", { event: "*", schema: "public", table: "email_queue" }, () => {
+        queryClient.invalidateQueries({ queryKey: ["emails-sent-today"] });
+        queryClient.invalidateQueries({ queryKey: ["dashboard-daily"] });
+      })
+      .on("postgres_changes", { event: "*", schema: "public", table: "contacts" }, () => {
+        queryClient.invalidateQueries({ queryKey: ["contacts-count"] });
+        queryClient.invalidateQueries({ queryKey: ["recent-contacts"] });
+        queryClient.invalidateQueries({ queryKey: ["replies-count"] });
+      })
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, [user, queryClient]);
 
   const { data: contacts } = useQuery({
     queryKey: ["contacts-count", user?.id],
@@ -75,16 +101,37 @@ const Dashboard = () => {
     enabled: !!user,
   });
 
-  // Mock chart data (would come from aggregated email_queue data in production)
-  const emailData = [
-    { date: "Mon", sent: 0, replies: 0 },
-    { date: "Tue", sent: 0, replies: 0 },
-    { date: "Wed", sent: 0, replies: 0 },
-    { date: "Thu", sent: 0, replies: 0 },
-    { date: "Fri", sent: 0, replies: 0 },
-    { date: "Sat", sent: 0, replies: 0 },
-    { date: "Sun", sent: 0, replies: 0 },
-  ];
+  // Real chart data - last 7 days from email_queue and email_events
+  const { data: emailData = [] } = useQuery({
+    queryKey: ["dashboard-daily", user?.id],
+    queryFn: async () => {
+      const days = 7;
+      const result = [];
+      for (let i = days - 1; i >= 0; i--) {
+        const date = new Date();
+        date.setDate(date.getDate() - i);
+        const dayStr = date.toISOString().split("T")[0];
+        const nextDay = new Date(date);
+        nextDay.setDate(nextDay.getDate() + 1);
+        const nextDayStr = nextDay.toISOString().split("T")[0];
+
+        const [sentRes, repliesRes] = await Promise.all([
+          supabase.from("email_queue").select("*", { count: "exact", head: true })
+            .eq("status", "sent").gte("sent_at", dayStr).lt("sent_at", nextDayStr),
+          supabase.from("email_events").select("*", { count: "exact", head: true })
+            .eq("event_type", "open").gte("created_at", dayStr).lt("created_at", nextDayStr),
+        ]);
+
+        result.push({
+          date: date.toLocaleDateString("en", { weekday: "short" }),
+          sent: sentRes.count || 0,
+          opens: repliesRes.count || 0,
+        });
+      }
+      return result;
+    },
+    enabled: !!user,
+  });
 
   return (
     <div className="space-y-8">
@@ -102,11 +149,11 @@ const Dashboard = () => {
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
         <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }} className="stat-card lg:col-span-2 !p-5">
-          <h3 className="font-display font-semibold text-foreground mb-4">Email Activity</h3>
+          <h3 className="font-display font-semibold text-foreground mb-4">Email Activity (Last 7 Days)</h3>
           <ResponsiveContainer width="100%" height={260}>
             <AreaChart data={emailData}>
               <defs>
-                <linearGradient id="sentGrad" x1="0" y1="0" x2="0" y2="1">
+                <linearGradient id="sentGradD" x1="0" y1="0" x2="0" y2="1">
                   <stop offset="0%" stopColor="hsl(168, 80%, 36%)" stopOpacity={0.3} />
                   <stop offset="100%" stopColor="hsl(168, 80%, 36%)" stopOpacity={0} />
                 </linearGradient>
@@ -114,9 +161,9 @@ const Dashboard = () => {
               <CartesianGrid strokeDasharray="3 3" stroke="hsl(220, 13%, 91%)" />
               <XAxis dataKey="date" tick={{ fontSize: 12, fill: "hsl(220, 9%, 46%)" }} />
               <YAxis tick={{ fontSize: 12, fill: "hsl(220, 9%, 46%)" }} />
-              <Tooltip />
-              <Area type="monotone" dataKey="sent" stroke="hsl(168, 80%, 36%)" fill="url(#sentGrad)" strokeWidth={2} />
-              <Area type="monotone" dataKey="replies" stroke="hsl(210, 92%, 55%)" fill="transparent" strokeWidth={2} strokeDasharray="4 4" />
+              <Tooltip contentStyle={{ background: "hsl(0, 0%, 100%)", border: "1px solid hsl(220, 13%, 91%)", borderRadius: "8px", fontSize: "12px" }} />
+              <Area type="monotone" dataKey="sent" stroke="hsl(168, 80%, 36%)" fill="url(#sentGradD)" strokeWidth={2} name="Sent" />
+              <Area type="monotone" dataKey="opens" stroke="hsl(210, 92%, 55%)" fill="transparent" strokeWidth={2} strokeDasharray="4 4" name="Opens" />
             </AreaChart>
           </ResponsiveContainer>
         </motion.div>

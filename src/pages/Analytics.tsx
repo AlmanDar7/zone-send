@@ -1,16 +1,35 @@
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { BarChart3, Eye, MousePointerClick, MessageSquare, AlertTriangle, TrendingUp } from "lucide-react";
-import { AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from "recharts";
+import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from "recharts";
 import StatCard from "@/components/StatCard";
 import { motion } from "framer-motion";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 const Analytics = () => {
   const { user } = useAuth();
+  const queryClient = useQueryClient();
   const [selectedCampaign, setSelectedCampaign] = useState<string>("all");
+
+  // Realtime subscription to auto-refresh analytics
+  useEffect(() => {
+    if (!user) return;
+    const channel = supabase
+      .channel("analytics-realtime")
+      .on("postgres_changes", { event: "*", schema: "public", table: "email_events" }, () => {
+        queryClient.invalidateQueries({ queryKey: ["analytics-stats"] });
+        queryClient.invalidateQueries({ queryKey: ["analytics-daily"] });
+        queryClient.invalidateQueries({ queryKey: ["top-contacts"] });
+      })
+      .on("postgres_changes", { event: "*", schema: "public", table: "email_queue" }, () => {
+        queryClient.invalidateQueries({ queryKey: ["analytics-stats"] });
+        queryClient.invalidateQueries({ queryKey: ["analytics-daily"] });
+      })
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, [user, queryClient]);
 
   const { data: campaigns = [] } = useQuery({
     queryKey: ["campaigns-analytics", user?.id],
@@ -24,21 +43,24 @@ const Analytics = () => {
   const { data: stats } = useQuery({
     queryKey: ["analytics-stats", user?.id, selectedCampaign],
     queryFn: async () => {
+      // Build separate queries to avoid mutation issues
       let sentQuery = supabase.from("email_queue").select("*", { count: "exact", head: true }).eq("status", "sent");
       let eventsQuery = supabase.from("email_events").select("*");
-      let contactsQuery = supabase.from("contacts").select("*", { count: "exact", head: true });
+      let repliedQuery = supabase.from("contacts").select("*", { count: "exact", head: true }).eq("status", "Replied");
+      let bouncedQuery = supabase.from("contacts").select("*", { count: "exact", head: true }).eq("status", "Bounced");
 
       if (selectedCampaign !== "all") {
         sentQuery = sentQuery.eq("campaign_id", selectedCampaign);
         eventsQuery = eventsQuery.eq("campaign_id", selectedCampaign);
-        contactsQuery = contactsQuery.eq("campaign_id", selectedCampaign);
+        repliedQuery = repliedQuery.eq("campaign_id", selectedCampaign);
+        bouncedQuery = bouncedQuery.eq("campaign_id", selectedCampaign);
       }
 
       const [sentRes, eventsRes, repliedRes, bouncedRes] = await Promise.all([
         sentQuery,
         eventsQuery,
-        contactsQuery.eq("status", "Replied"),
-        contactsQuery.eq("status", "Bounced"),
+        repliedQuery,
+        bouncedQuery,
       ]);
 
       const events = eventsRes.data || [];
@@ -152,11 +174,11 @@ const Analytics = () => {
           <ResponsiveContainer width="100%" height={280}>
             <AreaChart data={dailyData}>
               <defs>
-                <linearGradient id="sentGrad" x1="0" y1="0" x2="0" y2="1">
+                <linearGradient id="sentGradA" x1="0" y1="0" x2="0" y2="1">
                   <stop offset="0%" stopColor="hsl(168, 80%, 36%)" stopOpacity={0.3} />
                   <stop offset="100%" stopColor="hsl(168, 80%, 36%)" stopOpacity={0} />
                 </linearGradient>
-                <linearGradient id="opensGrad" x1="0" y1="0" x2="0" y2="1">
+                <linearGradient id="opensGradA" x1="0" y1="0" x2="0" y2="1">
                   <stop offset="0%" stopColor="hsl(210, 92%, 55%)" stopOpacity={0.2} />
                   <stop offset="100%" stopColor="hsl(210, 92%, 55%)" stopOpacity={0} />
                 </linearGradient>
@@ -165,8 +187,8 @@ const Analytics = () => {
               <XAxis dataKey="date" tick={{ fontSize: 12, fill: "hsl(220, 9%, 46%)" }} />
               <YAxis tick={{ fontSize: 12, fill: "hsl(220, 9%, 46%)" }} />
               <Tooltip contentStyle={{ background: "hsl(0, 0%, 100%)", border: "1px solid hsl(220, 13%, 91%)", borderRadius: "8px", fontSize: "12px" }} />
-              <Area type="monotone" dataKey="sent" stroke="hsl(168, 80%, 36%)" fill="url(#sentGrad)" strokeWidth={2} name="Sent" />
-              <Area type="monotone" dataKey="opens" stroke="hsl(210, 92%, 55%)" fill="url(#opensGrad)" strokeWidth={2} name="Opens" />
+              <Area type="monotone" dataKey="sent" stroke="hsl(168, 80%, 36%)" fill="url(#sentGradA)" strokeWidth={2} name="Sent" />
+              <Area type="monotone" dataKey="opens" stroke="hsl(210, 92%, 55%)" fill="url(#opensGradA)" strokeWidth={2} name="Opens" />
               <Area type="monotone" dataKey="clicks" stroke="hsl(38, 92%, 50%)" fill="transparent" strokeWidth={2} strokeDasharray="4 4" name="Clicks" />
             </AreaChart>
           </ResponsiveContainer>
