@@ -155,6 +155,7 @@ export type Database = {
           date_added: string
           email: string
           id: string
+          lead_score: number
           name: string
           reply_date: string | null
           source: string | null
@@ -170,6 +171,7 @@ export type Database = {
           date_added?: string
           email: string
           id?: string
+          lead_score?: number
           name: string
           reply_date?: string | null
           source?: string | null
@@ -185,6 +187,7 @@ export type Database = {
           date_added?: string
           email?: string
           id?: string
+          lead_score?: number
           name?: string
           reply_date?: string | null
           source?: string | null
@@ -202,13 +205,76 @@ export type Database = {
           },
         ]
       }
+      email_events: {
+        Row: {
+          campaign_id: string | null
+          contact_id: string | null
+          created_at: string
+          email_queue_id: string | null
+          event_type: string
+          id: string
+          ip_address: string | null
+          link_url: string | null
+          user_agent: string | null
+          user_id: string
+        }
+        Insert: {
+          campaign_id?: string | null
+          contact_id?: string | null
+          created_at?: string
+          email_queue_id?: string | null
+          event_type: string
+          id?: string
+          ip_address?: string | null
+          link_url?: string | null
+          user_agent?: string | null
+          user_id: string
+        }
+        Update: {
+          campaign_id?: string | null
+          contact_id?: string | null
+          created_at?: string
+          email_queue_id?: string | null
+          event_type?: string
+          id?: string
+          ip_address?: string | null
+          link_url?: string | null
+          user_agent?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "email_events_campaign_id_fkey"
+            columns: ["campaign_id"]
+            isOneToOne: false
+            referencedRelation: "campaigns"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "email_events_contact_id_fkey"
+            columns: ["contact_id"]
+            isOneToOne: false
+            referencedRelation: "contacts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "email_events_email_queue_id_fkey"
+            columns: ["email_queue_id"]
+            isOneToOne: false
+            referencedRelation: "email_queue"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       email_queue: {
         Row: {
           campaign_id: string
+          click_count: number
           contact_id: string
           created_at: string
           error_message: string | null
           id: string
+          open_count: number
           scheduled_at: string
           sent_at: string | null
           status: string
@@ -217,10 +283,12 @@ export type Database = {
         }
         Insert: {
           campaign_id: string
+          click_count?: number
           contact_id: string
           created_at?: string
           error_message?: string | null
           id?: string
+          open_count?: number
           scheduled_at: string
           sent_at?: string | null
           status?: string
@@ -229,10 +297,12 @@ export type Database = {
         }
         Update: {
           campaign_id?: string
+          click_count?: number
           contact_id?: string
           created_at?: string
           error_message?: string | null
           id?: string
+          open_count?: number
           scheduled_at?: string
           sent_at?: string | null
           status?: string
@@ -426,7 +496,10 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      recalculate_lead_score: {
+        Args: { p_contact_id: string }
+        Returns: undefined
+      }
     }
     Enums: {
       [_ in never]: never
