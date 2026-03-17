@@ -10,7 +10,6 @@ import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import WebhooksManager from "@/components/WebhooksManager";
 
 const SettingsPage = () => {
   const { user } = useAuth();
@@ -163,10 +162,6 @@ const SettingsPage = () => {
         </div>
         <p className="text-xs text-muted-foreground">Overflow emails will be automatically queued for the next day.</p>
         <Button size="sm" onClick={() => saveLimit.mutate()} disabled={saveLimit.isPending}>{saveLimit.isPending ? "Saving..." : "Save Limits"}</Button>
-      </motion.div>
-
-      <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 }} className="stat-card !p-6">
-        <WebhooksManager />
       </motion.div>
     </div>
   );
