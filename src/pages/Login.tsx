@@ -115,6 +115,11 @@ const Login = () => {
             <Button type="submit" className="w-full" disabled={loading}>
               {loading ? "Please wait..." : isSignUp ? "Create Account" : "Sign In"}
             </Button>
+            {!isSignUp && (
+              <button type="button" onClick={handleForgotPassword} className="text-sm text-primary hover:underline w-full text-right">
+                Forgot password?
+              </button>
+            )}
           </form>
 
           <p className="text-sm text-center text-muted-foreground">
