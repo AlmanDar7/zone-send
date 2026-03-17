@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
+import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -33,6 +34,22 @@ const Login = () => {
       toast.error(err.message || "Authentication failed");
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleForgotPassword = async () => {
+    if (!email) {
+      toast.error("Please enter your email address first");
+      return;
+    }
+    try {
+      const { error } = await supabase.auth.resetPasswordForEmail(email, {
+        redirectTo: `${window.location.origin}/reset-password`,
+      });
+      if (error) throw error;
+      toast.success("Password reset link sent! Check your email.");
+    } catch (err: any) {
+      toast.error(err.message || "Failed to send reset email");
     }
   };
 
@@ -98,6 +115,11 @@ const Login = () => {
             <Button type="submit" className="w-full" disabled={loading}>
               {loading ? "Please wait..." : isSignUp ? "Create Account" : "Sign In"}
             </Button>
+            {!isSignUp && (
+              <button type="button" onClick={handleForgotPassword} className="text-sm text-primary hover:underline w-full text-right">
+                Forgot password?
+              </button>
+            )}
           </form>
 
           <p className="text-sm text-center text-muted-foreground">
