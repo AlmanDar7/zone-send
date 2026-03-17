@@ -15,6 +15,7 @@ import Analytics from "@/pages/Analytics";
 import SettingsPage from "@/pages/SettingsPage";
 import EmailQueue from "@/pages/EmailQueue";
 import CampaignReport from "@/pages/CampaignReport";
+import ResetPassword from "@/pages/ResetPassword";
 import NotFound from "@/pages/NotFound";
 
 const queryClient = new QueryClient();
