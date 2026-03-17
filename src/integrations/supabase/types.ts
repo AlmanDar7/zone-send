@@ -16,28 +16,46 @@ export type Database = {
     Tables: {
       campaign_steps: {
         Row: {
+          ab_test_enabled: boolean | null
+          body_a: string | null
+          body_b: string | null
           campaign_id: string
           created_at: string
           delay_days: number
           id: string
           step_number: number
+          subject_a: string | null
+          subject_b: string | null
           template_id: string | null
+          winning_variant: string | null
         }
         Insert: {
+          ab_test_enabled?: boolean | null
+          body_a?: string | null
+          body_b?: string | null
           campaign_id: string
           created_at?: string
           delay_days?: number
           id?: string
           step_number: number
+          subject_a?: string | null
+          subject_b?: string | null
           template_id?: string | null
+          winning_variant?: string | null
         }
         Update: {
+          ab_test_enabled?: boolean | null
+          body_a?: string | null
+          body_b?: string | null
           campaign_id?: string
           created_at?: string
           delay_days?: number
           id?: string
           step_number?: number
+          subject_a?: string | null
+          subject_b?: string | null
           template_id?: string | null
+          winning_variant?: string | null
         }
         Relationships: [
           {
@@ -160,6 +178,7 @@ export type Database = {
           reply_date: string | null
           source: string | null
           status: string
+          timezone: string | null
           updated_at: string
           user_id: string
         }
@@ -176,6 +195,7 @@ export type Database = {
           reply_date?: string | null
           source?: string | null
           status?: string
+          timezone?: string | null
           updated_at?: string
           user_id: string
         }
@@ -192,6 +212,7 @@ export type Database = {
           reply_date?: string | null
           source?: string | null
           status?: string
+          timezone?: string | null
           updated_at?: string
           user_id?: string
         }
@@ -280,6 +301,7 @@ export type Database = {
           status: string
           step_number: number
           user_id: string
+          variant: string | null
         }
         Insert: {
           campaign_id: string
@@ -294,6 +316,7 @@ export type Database = {
           status?: string
           step_number?: number
           user_id: string
+          variant?: string | null
         }
         Update: {
           campaign_id?: string
@@ -308,6 +331,7 @@ export type Database = {
           status?: string
           step_number?: number
           user_id?: string
+          variant?: string | null
         }
         Relationships: [
           {
@@ -488,6 +512,83 @@ export type Database = {
           use_ssl?: boolean
           user_id?: string
           username?: string
+        }
+        Relationships: []
+      }
+      webhook_deliveries: {
+        Row: {
+          created_at: string
+          event_type: string
+          id: string
+          payload: Json
+          response_body: string | null
+          status_code: number | null
+          success: boolean | null
+          webhook_id: string
+        }
+        Insert: {
+          created_at?: string
+          event_type: string
+          id?: string
+          payload?: Json
+          response_body?: string | null
+          status_code?: number | null
+          success?: boolean | null
+          webhook_id: string
+        }
+        Update: {
+          created_at?: string
+          event_type?: string
+          id?: string
+          payload?: Json
+          response_body?: string | null
+          status_code?: number | null
+          success?: boolean | null
+          webhook_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "webhook_deliveries_webhook_id_fkey"
+            columns: ["webhook_id"]
+            isOneToOne: false
+            referencedRelation: "webhooks"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      webhooks: {
+        Row: {
+          created_at: string
+          events: string[]
+          id: string
+          is_active: boolean
+          name: string
+          secret: string | null
+          updated_at: string
+          url: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          events?: string[]
+          id?: string
+          is_active?: boolean
+          name: string
+          secret?: string | null
+          updated_at?: string
+          url: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          events?: string[]
+          id?: string
+          is_active?: boolean
+          name?: string
+          secret?: string | null
+          updated_at?: string
+          url?: string
+          user_id?: string
         }
         Relationships: []
       }

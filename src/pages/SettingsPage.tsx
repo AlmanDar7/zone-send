@@ -10,6 +10,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
+import WebhooksManager from "@/components/WebhooksManager";
 
 const SettingsPage = () => {
   const { user } = useAuth();
@@ -130,8 +131,8 @@ const SettingsPage = () => {
               </button>
             </div>
           </div>
-          <div className="space-y-2"><Label>From Name</Label><Input value={smtp.from_name} onChange={(e) => setSmtp({ ...smtp, from_name: e.target.value })} placeholder="TechlyZone" /></div>
-          <div className="space-y-2"><Label>From Email</Label><Input value={smtp.from_email} onChange={(e) => setSmtp({ ...smtp, from_email: e.target.value })} placeholder="hello@techlyzone.com" /></div>
+          <div className="space-y-2"><Label>From Name</Label><Input value={smtp.from_name} onChange={(e) => setSmtp({ ...smtp, from_name: e.target.value })} placeholder="Reachquix" /></div>
+          <div className="space-y-2"><Label>From Email</Label><Input value={smtp.from_email} onChange={(e) => setSmtp({ ...smtp, from_email: e.target.value })} placeholder="hello@reachquix.com" /></div>
         </div>
         <div className="flex items-center gap-2">
           <Switch checked={smtp.use_ssl} onCheckedChange={(v) => setSmtp({ ...smtp, use_ssl: v })} />
@@ -162,6 +163,10 @@ const SettingsPage = () => {
         </div>
         <p className="text-xs text-muted-foreground">Overflow emails will be automatically queued for the next day.</p>
         <Button size="sm" onClick={() => saveLimit.mutate()} disabled={saveLimit.isPending}>{saveLimit.isPending ? "Saving..." : "Save Limits"}</Button>
+      </motion.div>
+
+      <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 }} className="stat-card !p-6">
+        <WebhooksManager />
       </motion.div>
     </div>
   );
