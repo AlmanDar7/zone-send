@@ -234,6 +234,9 @@ const Campaigns = () => {
                           <button className="p-2 rounded-lg hover:bg-muted transition-colors"><MoreHorizontal className="w-4 h-4 text-muted-foreground" /></button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
+                          <DropdownMenuItem onClick={() => navigate(`/campaigns/${campaign.id}/report`)}>
+                            <BarChart3 className="w-4 h-4 mr-2" />View Report
+                          </DropdownMenuItem>
                           <DropdownMenuItem onClick={() => deleteCampaign.mutate(campaign.id)} className="text-destructive">
                             <Trash2 className="w-4 h-4 mr-2" />Delete
                           </DropdownMenuItem>

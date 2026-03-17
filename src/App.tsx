@@ -13,6 +13,8 @@ import Campaigns from "@/pages/Campaigns";
 import Templates from "@/pages/Templates";
 import Analytics from "@/pages/Analytics";
 import SettingsPage from "@/pages/SettingsPage";
+import EmailQueue from "@/pages/EmailQueue";
+import CampaignReport from "@/pages/CampaignReport";
 import NotFound from "@/pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -31,8 +33,10 @@ const App = () => (
               <Route path="/dashboard" element={<Dashboard />} />
               <Route path="/contacts" element={<Contacts />} />
               <Route path="/campaigns" element={<Campaigns />} />
+              <Route path="/campaigns/:id/report" element={<CampaignReport />} />
               <Route path="/templates" element={<Templates />} />
               <Route path="/analytics" element={<Analytics />} />
+              <Route path="/email-queue" element={<EmailQueue />} />
               <Route path="/settings" element={<SettingsPage />} />
             </Route>
             <Route path="*" element={<NotFound />} />
