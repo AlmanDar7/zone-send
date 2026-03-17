@@ -5,6 +5,7 @@ import {
   Users,
   Send,
   FileText,
+  BarChart3,
   Settings,
   Mail,
   LogOut,
