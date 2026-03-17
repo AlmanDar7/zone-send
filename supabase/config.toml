@@ -11,3 +11,9 @@ verify_jwt = false
 
 [functions.check-replies]
 verify_jwt = false
+
+[functions.track-email]
+verify_jwt = false
+
+[functions.ai-email-writer]
+verify_jwt = false
