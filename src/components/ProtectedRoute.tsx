@@ -14,6 +14,11 @@ const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
 
   if (!user) return <Navigate to="/login" replace />;
 
+  // Check email verification - skip for OAuth users (they're auto-verified)
+  if (!user.email_confirmed_at) {
+    return <Navigate to="/verify-email" replace />;
+  }
+
   return <>{children}</>;
 };
 
