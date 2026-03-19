@@ -10,6 +10,7 @@ import {
   Mail,
   LogOut,
   Inbox,
+  UserCircle2,
 } from "lucide-react";
 
 const navItems = [
@@ -19,6 +20,7 @@ const navItems = [
   { to: "/templates", icon: FileText, label: "Templates" },
   { to: "/email-queue", icon: Inbox, label: "Email Queue" },
   { to: "/analytics", icon: BarChart3, label: "Analytics" },
+  { to: "/profile", icon: UserCircle2, label: "Profile" },
   { to: "/settings", icon: Settings, label: "Settings" },
 ];
 

@@ -17,6 +17,7 @@ import SettingsPage from "@/pages/SettingsPage";
 import EmailQueue from "@/pages/EmailQueue";
 import CampaignReport from "@/pages/CampaignReport";
 import ResetPassword from "@/pages/ResetPassword";
+import Profile from "@/pages/Profile";
 import NotFound from "@/pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -41,6 +42,7 @@ const App = () => (
               <Route path="/templates" element={<Templates />} />
               <Route path="/analytics" element={<Analytics />} />
               <Route path="/email-queue" element={<EmailQueue />} />
+              <Route path="/profile" element={<Profile />} />
               <Route path="/settings" element={<SettingsPage />} />
             </Route>
             <Route path="*" element={<NotFound />} />
