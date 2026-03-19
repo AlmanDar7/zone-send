@@ -6,9 +6,10 @@ interface AuthContextType {
   user: User | null;
   session: Session | null;
   loading: boolean;
-  signUp: (email: string, password: string, fullName: string) => Promise<void>;
+  signUp: (email: string, password: string) => Promise<void>;
   signIn: (email: string, password: string) => Promise<void>;
   signOut: () => Promise<void>;
+  refreshUser: () => Promise<User | null>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -18,34 +19,99 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      setSession(session);
-      setUser(session?.user ?? null);
-      setLoading(false);
+  const ensureProfile = async (currentUser: User) => {
+    const { data: existingProfile, error: fetchError } = await supabase
+      .from("profiles")
+      .select("id, full_name")
+      .eq("user_id", currentUser.id)
+      .maybeSingle();
+
+    if (fetchError) {
+      console.error("Failed to load profile:", fetchError.message);
+      return;
+    }
+
+    if (existingProfile) return;
+
+    const fallbackName =
+      currentUser.user_metadata?.full_name ||
+      currentUser.user_metadata?.name ||
+      currentUser.email?.split("@")[0] ||
+      null;
+
+    const { error: insertError } = await supabase.from("profiles").insert({
+      user_id: currentUser.id,
+      full_name: fallbackName,
     });
 
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session);
-      setUser(session?.user ?? null);
+    if (insertError) {
+      console.error("Failed to create profile:", insertError.message);
+    }
+  };
+
+  const syncAuthState = async (nextSession: Session | null) => {
+    if (!nextSession) {
+      setSession(null);
+      setUser(null);
       setLoading(false);
+      return null;
+    }
+
+    const { data, error } = await supabase.auth.getUser(nextSession.access_token);
+
+    if (error || !data.user) {
+      setSession(null);
+      setUser(null);
+      setLoading(false);
+      await supabase.auth.signOut().catch(() => undefined);
+      return null;
+    }
+
+    setSession(nextSession);
+    setUser(data.user);
+    setLoading(false);
+
+    await ensureProfile(data.user);
+
+    return data.user;
+  };
+
+  useEffect(() => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, nextSession) => {
+      void syncAuthState(nextSession);
+    });
+
+    void supabase.auth.getSession().then(({ data: { session: existingSession } }) => {
+      void syncAuthState(existingSession);
     });
 
     return () => subscription.unsubscribe();
   }, []);
 
-  const signUp = async (email: string, password: string, fullName: string) => {
+  const signUp = async (email: string, password: string) => {
     const { error } = await supabase.auth.signUp({
       email,
       password,
-      options: { data: { full_name: fullName } },
+      options: {
+        emailRedirectTo: `${window.location.origin}/verify-email`,
+        data: {
+          full_name: email.split("@")[0],
+        },
+      },
     });
+
     if (error) throw error;
   };
 
   const signIn = async (email: string, password: string) => {
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+
     if (error) throw error;
+
+    if (data.user && !data.user.email_confirmed_at) {
+      await supabase.auth.signOut().catch(() => undefined);
+      throw new Error("Please verify your email before signing in.");
+    }
   };
 
   const signOut = async () => {
@@ -53,8 +119,13 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     if (error) throw error;
   };
 
+  const refreshUser = async () => {
+    const { data: { session: currentSession } } = await supabase.auth.getSession();
+    return syncAuthState(currentSession);
+  };
+
   return (
-    <AuthContext.Provider value={{ user, session, loading, signUp, signIn, signOut }}>
+    <AuthContext.Provider value={{ user, session, loading, signUp, signIn, signOut, refreshUser }}>
       {children}
     </AuthContext.Provider>
   );

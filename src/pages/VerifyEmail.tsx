@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useEffect, useMemo, useState } from "react";
+import { useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -9,22 +9,49 @@ import { toast } from "sonner";
 
 const VerifyEmail = () => {
   const navigate = useNavigate();
-  const { user, signOut } = useAuth();
+  const location = useLocation();
+  const { user, signOut, refreshUser } = useAuth();
   const [resending, setResending] = useState(false);
   const [checking, setChecking] = useState(false);
 
+  const verificationEmail = useMemo(() => {
+    const stateEmail = (location.state as { email?: string } | null)?.email;
+    return user?.email || stateEmail || sessionStorage.getItem("pendingVerificationEmail") || "";
+  }, [location.state, user?.email]);
+
+  useEffect(() => {
+    if (verificationEmail) {
+      sessionStorage.setItem("pendingVerificationEmail", verificationEmail);
+    }
+
+    if (user?.email_confirmed_at) {
+      sessionStorage.removeItem("pendingVerificationEmail");
+      navigate("/dashboard", { replace: true });
+    }
+  }, [navigate, user?.email_confirmed_at, verificationEmail]);
+
   const handleResend = async () => {
-    if (!user?.email) return;
+    if (!verificationEmail) {
+      toast.error("Verification email could not be sent. Try again.");
+      return;
+    }
+
     setResending(true);
+
     try {
       const { error } = await supabase.auth.resend({
         type: "signup",
-        email: user.email,
+        email: verificationEmail,
+        options: {
+          emailRedirectTo: `${window.location.origin}/verify-email`,
+        },
       });
+
       if (error) throw error;
-      toast.success("Verification email sent! Check your inbox.");
-    } catch (err: any) {
-      toast.error(err.message || "Failed to resend email");
+
+      toast.success("Verification email sent successfully");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Verification email could not be sent. Try again.");
     } finally {
       setResending(false);
     }
@@ -32,26 +59,29 @@ const VerifyEmail = () => {
 
   const handleCheckVerification = async () => {
     setChecking(true);
+
     try {
-      const { data, error } = await supabase.auth.getUser();
-      if (error) throw error;
-      if (data.user?.email_confirmed_at) {
-        toast.success("Email verified! Redirecting...");
-        // Force session refresh
-        await supabase.auth.refreshSession();
+      await supabase.auth.refreshSession();
+      const refreshedUser = await refreshUser();
+
+      if (refreshedUser?.email_confirmed_at) {
+        sessionStorage.removeItem("pendingVerificationEmail");
+        toast.success("Email verified successfully");
         navigate("/dashboard", { replace: true });
-      } else {
-        toast.error("Email not yet verified. Please check your inbox.");
+        return;
       }
-    } catch (err: any) {
-      toast.error(err.message || "Failed to check status");
+
+      toast.error("Email not verified yet. Please check your inbox.");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Email not verified yet. Please check your inbox.");
     } finally {
       setChecking(false);
     }
   };
 
   const handleSignOut = async () => {
-    await signOut();
+    sessionStorage.removeItem("pendingVerificationEmail");
+    await signOut().catch(() => undefined);
     navigate("/login", { replace: true });
   };
 
@@ -68,48 +98,31 @@ const VerifyEmail = () => {
           </div>
         </div>
 
-        <div>
-          <h1 className="text-2xl font-display font-bold text-foreground">
-            Verify your email
-          </h1>
-          <p className="text-sm text-muted-foreground mt-2">
-            We sent a verification link to{" "}
-            <span className="font-medium text-foreground">{user?.email}</span>.
-            Please check your inbox and click the link to continue.
+        <div className="space-y-3">
+          <h1 className="text-2xl font-display font-bold text-foreground">Verify your email</h1>
+          <p className="text-sm text-muted-foreground">
+            We've sent a verification link to your email. Please verify to continue.
           </p>
+          {verificationEmail && (
+            <p className="text-sm font-medium text-foreground">{verificationEmail}</p>
+          )}
         </div>
 
         <div className="space-y-3">
-          <Button
-            onClick={handleCheckVerification}
-            className="w-full"
-            disabled={checking}
-          >
-            {checking ? (
-              <RefreshCw className="w-4 h-4 animate-spin mr-2" />
-            ) : (
-              <CheckCircle className="w-4 h-4 mr-2" />
-            )}
-            I have verified my email
+          <Button onClick={handleResend} variant="outline" className="w-full" disabled={resending}>
+            {resending ? <RefreshCw className="w-4 h-4 animate-spin mr-2" /> : <Mail className="w-4 h-4 mr-2" />}
+            Resend verification email
           </Button>
 
-          <Button
-            onClick={handleResend}
-            variant="outline"
-            className="w-full"
-            disabled={resending}
-          >
-            {resending ? (
-              <RefreshCw className="w-4 h-4 animate-spin mr-2" />
-            ) : (
-              <Mail className="w-4 h-4 mr-2" />
-            )}
-            Resend verification email
+          <Button onClick={handleCheckVerification} className="w-full" disabled={checking}>
+            {checking ? <RefreshCw className="w-4 h-4 animate-spin mr-2" /> : <CheckCircle className="w-4 h-4 mr-2" />}
+            I have verified
           </Button>
 
           <button
             onClick={handleSignOut}
             className="text-sm text-muted-foreground hover:text-foreground transition-colors"
+            type="button"
           >
             Sign in with a different account
           </button>

@@ -20,41 +20,73 @@ const GoogleIcon = () => (
   </svg>
 );
 
+const getAuthErrorMessage = (error: unknown) => {
+  const message = error instanceof Error ? error.message : "Authentication failed";
+
+  if (message.includes("Invalid login credentials")) return "Invalid email or password.";
+  if (message.includes("User already registered")) return "Email already exists.";
+  if (message.includes("verify your email")) return "Please verify your email before signing in.";
+
+  return message;
+};
+
 const Login = () => {
   const navigate = useNavigate();
   const { signIn, signUp } = useAuth();
   const [isSignUp, setIsSignUp] = useState(false);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [fullName, setFullName] = useState("");
   const [loading, setLoading] = useState(false);
+  const [oauthLoading, setOauthLoading] = useState(false);
+  const [forgotLoading, setForgotLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
+
     try {
       if (isSignUp) {
-        await signUp(email, password, fullName);
-        toast.success("Account created! Check your email to verify.");
-        navigate("/verify-email");
-      } else {
-        await signIn(email, password);
-        navigate("/dashboard");
+        await signUp(email, password);
+        sessionStorage.setItem("pendingVerificationEmail", email);
+        toast.success("Verification email sent successfully");
+        navigate("/verify-email", { state: { email } });
+        return;
       }
-    } catch (err: any) {
-      toast.error(err.message || "Authentication failed");
+
+      await signIn(email, password);
+      toast.success("Logged in successfully");
+      navigate("/dashboard");
+    } catch (error) {
+      const message = getAuthErrorMessage(error);
+      if (isSignUp && !message) {
+        toast.error("Verification email could not be sent. Try again.");
+      } else {
+        toast.error(message || "Verification email could not be sent. Try again.");
+      }
     } finally {
       setLoading(false);
     }
   };
 
   const handleGoogleSignIn = async () => {
-    const { error } = await lovable.auth.signInWithOAuth("google", {
-      redirect_uri: window.location.origin,
-    });
-    if (error) {
+    setOauthLoading(true);
+
+    try {
+      const result = await lovable.auth.signInWithOAuth("google", {
+        redirect_uri: window.location.origin,
+      });
+
+      if (result.error) throw result.error;
+
+      if (!result.redirected) {
+        toast.success("Logged in successfully");
+        navigate("/dashboard");
+      }
+    } catch {
       toast.error("Google sign in failed. Please try again.");
+    } finally {
+      setOauthLoading(false);
     }
   };
 
@@ -63,14 +95,21 @@ const Login = () => {
       toast.error("Please enter your email address first");
       return;
     }
+
+    setForgotLoading(true);
+
     try {
       const { error } = await supabase.auth.resetPasswordForEmail(email, {
         redirectTo: `${window.location.origin}/reset-password`,
       });
+
       if (error) throw error;
-      toast.success("Password reset link sent! Check your email.");
-    } catch (err: any) {
-      toast.error(err.message || "Failed to send reset email");
+
+      toast.success("Password reset sent. Check your email.");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Failed to send reset email");
+    } finally {
+      setForgotLoading(false);
     }
   };
 
@@ -97,38 +136,22 @@ const Login = () => {
               {isSignUp ? "Create account" : "Welcome back"}
             </h2>
             <p className="text-sm text-muted-foreground mt-1">
-              {isSignUp ? "Start automating your outreach" : "Sign in to manage your campaigns"}
+              {isSignUp ? "Create your account and verify your email to continue" : "Sign in to manage your campaigns"}
             </p>
           </div>
 
-          {/* Google OAuth Button */}
-          <Button
-            type="button"
-            variant="outline"
-            className="w-full h-11 gap-3 font-medium"
-            onClick={handleGoogleSignIn}
-          >
-            <GoogleIcon />
-            Continue with Google
-          </Button>
-
-          <div className="flex items-center gap-3">
-            <Separator className="flex-1" />
-            <span className="text-xs text-muted-foreground">or</span>
-            <Separator className="flex-1" />
-          </div>
-
           <form onSubmit={handleSubmit} className="space-y-4">
-            {isSignUp && (
-              <div className="space-y-2">
-                <Label>Full Name</Label>
-                <Input placeholder="John Doe" value={fullName} onChange={(e) => setFullName(e.target.value)} required />
-              </div>
-            )}
             <div className="space-y-2">
               <Label>Email</Label>
-              <Input type="email" placeholder="you@company.com" value={email} onChange={(e) => setEmail(e.target.value)} required />
+              <Input
+                type="email"
+                placeholder="you@company.com"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                required
+              />
             </div>
+
             <div className="space-y-2">
               <Label>Password</Label>
               <div className="relative">
@@ -145,25 +168,54 @@ const Login = () => {
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
                   className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+                  aria-label={showPassword ? "Hide password" : "Show password"}
                 >
                   {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                 </button>
               </div>
             </div>
+
             <Button type="submit" className="w-full" disabled={loading}>
               {loading ? "Please wait..." : isSignUp ? "Create Account" : "Sign In"}
             </Button>
-            {!isSignUp && (
-              <button type="button" onClick={handleForgotPassword} className="text-sm text-primary hover:underline w-full text-right">
-                Forgot password?
-              </button>
-            )}
           </form>
+
+          <div className="flex items-center gap-3">
+            <Separator className="flex-1" />
+            <span className="text-xs text-muted-foreground">or</span>
+            <Separator className="flex-1" />
+          </div>
+
+          <Button
+            type="button"
+            variant="outline"
+            className="w-full h-11 gap-3 font-medium"
+            onClick={handleGoogleSignIn}
+            disabled={oauthLoading}
+          >
+            <GoogleIcon />
+            {oauthLoading ? "Connecting..." : "Continue with Google"}
+          </Button>
+
+          {!isSignUp && (
+            <button
+              type="button"
+              onClick={handleForgotPassword}
+              disabled={forgotLoading}
+              className="text-sm text-primary hover:underline w-full text-center disabled:opacity-60"
+            >
+              {forgotLoading ? "Sending reset email..." : "Forgot password?"}
+            </button>
+          )}
 
           <p className="text-sm text-center text-muted-foreground">
             {isSignUp ? "Already have an account?" : "Don't have an account?"}{" "}
-            <button onClick={() => setIsSignUp(!isSignUp)} className="text-primary font-medium hover:underline">
-              {isSignUp ? "Sign in" : "Sign up"}
+            <button
+              onClick={() => setIsSignUp(!isSignUp)}
+              className="text-primary font-medium hover:underline"
+              type="button"
+            >
+              {isSignUp ? "Sign in" : "Create an account"}
             </button>
           </p>
         </motion.div>
