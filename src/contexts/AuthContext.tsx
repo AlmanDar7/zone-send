@@ -49,40 +49,39 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }
   };
 
-  const syncAuthState = async (nextSession: Session | null) => {
-    if (!nextSession) {
-      setSession(null);
-      setUser(null);
-      setLoading(false);
-      return null;
-    }
-
-    if (!nextSession.user) {
-      setSession(null);
-      setUser(null);
-      setLoading(false);
-      return null;
-    }
+  const syncAuthState = (nextSession: Session | null) => {
+    const nextUser = nextSession?.user ?? null;
 
     setSession(nextSession);
-    setUser(nextSession.user);
+    setUser(nextUser);
     setLoading(false);
 
-    await ensureProfile(nextSession.user);
+    if (nextUser) {
+      window.setTimeout(() => {
+        void ensureProfile(nextUser);
+      }, 0);
+    }
 
-    return nextSession.user;
+    return nextUser;
   };
 
   useEffect(() => {
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, nextSession) => {
-      void syncAuthState(nextSession);
-    });
+    let mounted = true;
 
     void supabase.auth.getSession().then(({ data: { session: existingSession } }) => {
-      void syncAuthState(existingSession);
+      if (!mounted) return;
+      syncAuthState(existingSession);
     });
 
-    return () => subscription.unsubscribe();
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, nextSession) => {
+      if (!mounted || event === "INITIAL_SESSION") return;
+      syncAuthState(nextSession);
+    });
+
+    return () => {
+      mounted = false;
+      subscription.unsubscribe();
+    };
   }, []);
 
   const signUp = async (email: string, password: string) => {
