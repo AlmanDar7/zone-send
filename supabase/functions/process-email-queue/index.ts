@@ -199,6 +199,7 @@ serve(async (req) => {
 
         let rawSubject = template.subject;
         let rawBody = template.body;
+        let rawHtmlBody: string | null = (template as any).html_body || null;
 
         if ((stepConfig as any).ab_test_enabled && (email as any).variant) {
           const variant = (email as any).variant;
@@ -209,25 +210,32 @@ serve(async (req) => {
         }
 
         const firstName = contact.name?.split(" ")[0] || "there";
-        const subject = rawSubject
-          .replace(/\{\{FirstName\}\}/g, firstName)
-          .replace(/\{\{Email\}\}/g, contact.email)
-          .replace(/\{\{CompanyName\}\}/g, contact.company_name || "");
+        const replaceVars = (value: string) =>
+          value
+            .replace(/\{\{FirstName\}\}/g, firstName)
+            .replace(/\{\{Email\}\}/g, contact.email)
+            .replace(/\{\{CompanyName\}\}/g, contact.company_name || "");
 
-        const bodyText = rawBody
-          .replace(/\{\{FirstName\}\}/g, firstName)
-          .replace(/\{\{Email\}\}/g, contact.email)
-          .replace(/\{\{CompanyName\}\}/g, contact.company_name || "");
+        const subject = replaceVars(rawSubject);
+        const bodyText = replaceVars(rawBody);
+        const bodyHtmlSource = rawHtmlBody ? replaceVars(rawHtmlBody) : null;
 
         const trackBase = `${supabaseUrl}/functions/v1/track-email`;
         const trackParams = `c=${contact.id}&ca=${campaign.id}&q=${email.id}&u=${campaign.user_id}`;
         const trackingPixel = `<img src="${trackBase}?t=open&${trackParams}" width="1" height="1" style="display:none" alt="" />`;
         const unsubscribeUrl = `${supabaseUrl}/functions/v1/send-email?action=unsubscribe&contactId=${contact.id}`;
         const fullBody = `${bodyText}\n\n---\nTo unsubscribe: ${unsubscribeUrl}`;
-        const htmlBody = `${fullBody.replace(/\n/g, "<br>").replace(/href="(https?:\/\/[^\"]+)"/g, (_match: string, url: string) => {
-          const trackedUrl = `${trackBase}?t=click&${trackParams}&l=${encodeURIComponent(url)}`;
-          return `href="${trackedUrl}"`;
-        })}${trackingPixel}`;
+
+        const wrapClickTracking = (html: string) =>
+          html.replace(/href="(https?:\/\/[^\"]+)"/g, (_match: string, url: string) => {
+            const trackedUrl = `${trackBase}?t=click&${trackParams}&l=${encodeURIComponent(url)}`;
+            return `href="${trackedUrl}"`;
+          });
+
+        const unsubscribeHtml = `<br><br>---<br>To unsubscribe: <a href="${unsubscribeUrl}">click here</a>`;
+        const htmlBody = bodyHtmlSource
+          ? `${wrapClickTracking(bodyHtmlSource)}${unsubscribeHtml}${trackingPixel}`
+          : `${wrapClickTracking(fullBody.replace(/\n/g, "<br>"))}${trackingPixel}`;
 
         try {
           const { SMTPClient } = await import("https://deno.land/x/denomailer@1.6.0/mod.ts");
