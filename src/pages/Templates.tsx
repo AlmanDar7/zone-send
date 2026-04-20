@@ -20,7 +20,9 @@ import {
   buildVisualTemplateContent,
   getStarterTemplate,
   replaceTemplateVariables,
+  sampleTemplateVariables,
   type TemplateFormat,
+  type TemplateVariableValues,
   type VisualTemplateConfig,
   type VisualTemplatePresetId,
   visualTemplatePresets,
@@ -94,6 +96,7 @@ const Templates = () => {
   const [selectedTemplate, setSelectedTemplate] = useState<EmailTemplateRow | null>(null);
   const [previewTemplate, setPreviewTemplate] = useState<EmailTemplateRow | null>(null);
   const [form, setForm] = useState<TemplateFormState>(createEmptyForm());
+  const [previewVariables, setPreviewVariables] = useState<TemplateVariableValues>(sampleTemplateVariables);
 
   const { data: templates = [], isLoading } = useQuery({
     queryKey: ["templates", user?.id],
@@ -231,7 +234,12 @@ const Templates = () => {
   const updateVisualConfig = <K extends keyof VisualTemplateConfig>(key: K, value: VisualTemplateConfig[K]) => {
     setForm((prev) => {
       const currentConfig = prev.design_config || (getStarterTemplate("lead-magnet").design_config as VisualTemplateConfig);
-      const nextConfig = { ...currentConfig, [key]: value };
+      const nextConfig = { ...currentConfig, [key]: value } as VisualTemplateConfig;
+
+      if (key === "brandName" && typeof value === "string" && currentConfig.footerNote.includes(currentConfig.brandName)) {
+        nextConfig.footerNote = currentConfig.footerNote.replaceAll(currentConfig.brandName, value);
+      }
+
       const visualContent = buildVisualTemplateContent(nextConfig);
 
       return {
@@ -374,6 +382,9 @@ const Templates = () => {
                       value={form.design_config.brandName}
                       onChange={(e) => updateVisualConfig("brandName", e.target.value)}
                     />
+                    <p className="text-xs text-muted-foreground">
+                      This controls the top brand label, like the current "Ava Studio" badge.
+                    </p>
                   </div>
                   <div className="space-y-2">
                     <Label>Eyebrow label</Label>
@@ -527,10 +538,29 @@ const Templates = () => {
           </p>
         </div>
 
+        <div className="grid gap-3 rounded-xl border border-border bg-muted/20 p-3 sm:grid-cols-2">
+          <div className="space-y-2">
+            <Label>Preview first name</Label>
+            <Input
+              value={previewVariables.FirstName}
+              onChange={(e) => setPreviewVariables((prev) => ({ ...prev, FirstName: e.target.value }))}
+              placeholder="Ava"
+            />
+          </div>
+          <div className="space-y-2">
+            <Label>Preview company</Label>
+            <Input
+              value={previewVariables.CompanyName}
+              onChange={(e) => setPreviewVariables((prev) => ({ ...prev, CompanyName: e.target.value }))}
+              placeholder="Northstar"
+            />
+          </div>
+        </div>
+
         <div className="rounded-xl border border-border bg-muted/20 p-3">
           <p className="mb-2 text-xs text-muted-foreground">Subject</p>
           <p className="rounded-lg bg-background p-3 text-sm font-medium text-foreground">
-            {replaceTemplateVariables(form.subject || "Your email subject will appear here")}
+            {replaceTemplateVariables(form.subject || "Your email subject will appear here", previewVariables)}
           </p>
         </div>
 
@@ -538,6 +568,7 @@ const Templates = () => {
           html={form.html_body}
           body={form.body || "Start typing to see the preview."}
           className="min-h-[540px]"
+          variables={previewVariables}
         />
       </div>
     </div>

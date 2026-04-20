@@ -37,10 +37,18 @@ export const sampleTemplateVariables = {
   CompanyName: "Northstar",
 };
 
-export const replaceTemplateVariables = (text: string) =>
-  text.replace(/\{\{(\w+)\}\}/g, (_match, key: keyof typeof sampleTemplateVariables) => {
-    return sampleTemplateVariables[key] || `{{${key}}}`;
+export type TemplateVariableValues = typeof sampleTemplateVariables;
+
+export const replaceTemplateVariables = (text: string, overrides?: Partial<TemplateVariableValues>) => {
+  const values: TemplateVariableValues = {
+    ...sampleTemplateVariables,
+    ...overrides,
+  };
+
+  return text.replace(/\{\{(\w+)\}\}/g, (_match, key: keyof TemplateVariableValues) => {
+    return values[key] || `{{${key}}}`;
   });
+};
 
 const escapeHtml = (value: string) =>
   value
