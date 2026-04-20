@@ -1,0 +1,4 @@
+ALTER TABLE public.email_templates
+ADD COLUMN IF NOT EXISTS template_format TEXT NOT NULL DEFAULT 'plain',
+ADD COLUMN IF NOT EXISTS html_body TEXT,
+ADD COLUMN IF NOT EXISTS design_config JSONB;

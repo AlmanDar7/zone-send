@@ -354,9 +354,12 @@ export type Database = {
         Row: {
           body: string
           created_at: string
+          design_config: Json | null
+          html_body: string | null
           id: string
           name: string
           subject: string
+          template_format: string
           type: string
           updated_at: string
           user_id: string
@@ -364,9 +367,12 @@ export type Database = {
         Insert: {
           body: string
           created_at?: string
+          design_config?: Json | null
+          html_body?: string | null
           id?: string
           name: string
           subject: string
+          template_format?: string
           type?: string
           updated_at?: string
           user_id: string
@@ -374,9 +380,12 @@ export type Database = {
         Update: {
           body?: string
           created_at?: string
+          design_config?: Json | null
+          html_body?: string | null
           id?: string
           name?: string
           subject?: string
+          template_format?: string
           type?: string
           updated_at?: string
           user_id?: string
