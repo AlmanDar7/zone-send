@@ -11,23 +11,30 @@ import {
   LogOut,
   Inbox,
   UserCircle2,
+  ChevronDown,
 } from "lucide-react";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { cn } from "@/lib/utils";
 
-const navItems = [
+const primaryNavItems = [
   { to: "/dashboard", icon: LayoutDashboard, label: "Dashboard" },
   { to: "/contacts", icon: Users, label: "Contacts" },
+  { to: "/profile", icon: UserCircle2, label: "Profile" },
+  { to: "/settings", icon: Settings, label: "Settings" },
+];
+
+const emailNavItems = [
   { to: "/campaigns", icon: Send, label: "Campaigns" },
   { to: "/templates", icon: FileText, label: "Templates" },
   { to: "/email-queue", icon: Inbox, label: "Email Queue" },
   { to: "/analytics", icon: BarChart3, label: "Analytics" },
-  { to: "/profile", icon: UserCircle2, label: "Profile" },
-  { to: "/settings", icon: Settings, label: "Settings" },
 ];
 
 const AppSidebar = () => {
   const location = useLocation();
   const navigate = useNavigate();
   const { signOut } = useAuth();
+  const isEmailSectionActive = emailNavItems.some((item) => location.pathname === item.to);
 
   const handleSignOut = async () => {
     await signOut();
@@ -48,7 +55,66 @@ const AppSidebar = () => {
         </div>
       </div>
       <nav className="flex-1 p-4 space-y-1">
-        {navItems.map((item) => {
+        {primaryNavItems.slice(0, 2).map((item) => {
+          const isActive = location.pathname === item.to;
+          return (
+            <NavLink
+              key={item.to}
+              to={item.to}
+              className={`flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm font-medium transition-colors ${
+                isActive
+                  ? "bg-sidebar-accent text-sidebar-accent-foreground"
+                  : "text-sidebar-foreground hover:text-sidebar-accent-foreground hover:bg-sidebar-accent/50"
+              }`}
+            >
+              <item.icon className="w-4 h-4" />
+              {item.label}
+              {isActive && <div className="ml-auto w-1.5 h-1.5 rounded-full bg-primary" />}
+            </NavLink>
+          );
+        })}
+
+        <Collapsible defaultOpen={isEmailSectionActive} className="space-y-1">
+          <CollapsibleTrigger
+            className={cn(
+              "group flex w-full items-center gap-3 rounded-lg px-4 py-2.5 text-sm font-medium transition-colors",
+              isEmailSectionActive
+                ? "bg-sidebar-accent text-sidebar-accent-foreground"
+                : "text-sidebar-foreground hover:bg-sidebar-accent/50 hover:text-sidebar-accent-foreground",
+            )}
+          >
+            <Mail className="w-4 h-4" />
+            Email
+            <div className="ml-auto flex items-center gap-2">
+              {isEmailSectionActive && <div className="h-1.5 w-1.5 rounded-full bg-primary" />}
+              <ChevronDown className="w-4 h-4 transition-transform group-data-[state=open]:rotate-180" />
+            </div>
+          </CollapsibleTrigger>
+          <CollapsibleContent className="space-y-1">
+            <div className="ml-4 space-y-1 border-l border-sidebar-border pl-3">
+              {emailNavItems.map((item) => {
+                const isActive = location.pathname === item.to;
+                return (
+                  <NavLink
+                    key={item.to}
+                    to={item.to}
+                    className={`flex items-center gap-3 rounded-lg px-4 py-2.5 text-sm font-medium transition-colors ${
+                      isActive
+                        ? "bg-sidebar-accent text-sidebar-accent-foreground"
+                        : "text-sidebar-foreground hover:text-sidebar-accent-foreground hover:bg-sidebar-accent/50"
+                    }`}
+                  >
+                    <item.icon className="w-4 h-4" />
+                    {item.label}
+                    {isActive && <div className="ml-auto w-1.5 h-1.5 rounded-full bg-primary" />}
+                  </NavLink>
+                );
+              })}
+            </div>
+          </CollapsibleContent>
+        </Collapsible>
+
+        {primaryNavItems.slice(2).map((item) => {
           const isActive = location.pathname === item.to;
           return (
             <NavLink
