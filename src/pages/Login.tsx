@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
+import { lovable } from "@/integrations/lovable";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -78,24 +79,15 @@ const Login = () => {
     setOauthLoading(true);
 
     try {
-      const { data, error } = await supabase.auth.signInWithOAuth({
-        provider: "google",
-        options: {
-          redirectTo: `${window.location.origin}/auth/callback`,
-        },
+      const result = await lovable.auth.signInWithOAuth("google", {
+        redirect_uri: window.location.origin,
       });
 
-      if (error) throw error;
+      if (result.error) throw result.error;
+      if (result.redirected) return;
 
-      if (data.url) {
-        window.location.assign(data.url);
-        return;
-      }
-
-      if (!data.url) {
-        toast.success("Logged in successfully");
-        navigate("/dashboard");
-      }
+      toast.success("Logged in successfully");
+      navigate("/dashboard");
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Google sign in failed. Please try again.");
     } finally {

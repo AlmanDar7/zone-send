@@ -237,7 +237,7 @@ const Templates = () => {
       const nextConfig = { ...currentConfig, [key]: value } as VisualTemplateConfig;
 
       if (key === "brandName" && typeof value === "string" && currentConfig.footerNote.includes(currentConfig.brandName)) {
-        nextConfig.footerNote = currentConfig.footerNote.replaceAll(currentConfig.brandName, value);
+        nextConfig.footerNote = currentConfig.footerNote.split(currentConfig.brandName).join(value);
       }
 
       const visualContent = buildVisualTemplateContent(nextConfig);
