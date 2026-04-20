@@ -3,6 +3,22 @@ import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 
+const waitForSession = async (attempts = 20, delayMs = 150) => {
+  for (let attempt = 0; attempt < attempts; attempt += 1) {
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
+
+    if (session?.user) {
+      return session;
+    }
+
+    await new Promise((resolve) => window.setTimeout(resolve, delayMs));
+  }
+
+  return null;
+};
+
 const AuthCallback = () => {
   const navigate = useNavigate();
 
@@ -33,9 +49,7 @@ const AuthCallback = () => {
           if (error) throw error;
         }
 
-        const {
-          data: { session },
-        } = await supabase.auth.getSession();
+        const session = await waitForSession();
 
         if (!session?.user) {
           throw new Error("Authentication could not be completed.");
