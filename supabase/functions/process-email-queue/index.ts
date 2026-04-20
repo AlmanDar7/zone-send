@@ -218,23 +218,24 @@ serve(async (req) => {
 
         const subject = replaceVars(rawSubject);
         const bodyText = replaceVars(rawBody);
-        const bodyHtmlSource = rawHtmlBody ? replaceVars(rawHtmlBody) : null;
+        const bodyHtml = rawHtmlBody ? replaceVars(rawHtmlBody) : null;
 
         const trackBase = `${supabaseUrl}/functions/v1/track-email`;
         const trackParams = `c=${contact.id}&ca=${campaign.id}&q=${email.id}&u=${campaign.user_id}`;
         const trackingPixel = `<img src="${trackBase}?t=open&${trackParams}" width="1" height="1" style="display:none" alt="" />`;
         const unsubscribeUrl = `${supabaseUrl}/functions/v1/send-email?action=unsubscribe&contactId=${contact.id}`;
         const fullBody = `${bodyText}\n\n---\nTo unsubscribe: ${unsubscribeUrl}`;
-
         const wrapClickTracking = (html: string) =>
           html.replace(/href="(https?:\/\/[^\"]+)"/g, (_match: string, url: string) => {
             const trackedUrl = `${trackBase}?t=click&${trackParams}&l=${encodeURIComponent(url)}`;
             return `href="${trackedUrl}"`;
           });
 
-        const unsubscribeHtml = `<br><br>---<br>To unsubscribe: <a href="${unsubscribeUrl}">click here</a>`;
-        const htmlBody = bodyHtmlSource
-          ? `${wrapClickTracking(bodyHtmlSource)}${unsubscribeHtml}${trackingPixel}`
+        const unsubscribeHtml = bodyHtml
+          ? `<div style="margin-top:24px;font-family:Arial,sans-serif;font-size:12px;line-height:1.7;color:#64748b;">To unsubscribe, <a href="${unsubscribeUrl}">click here</a>.</div>`
+          : "";
+        const htmlBody = bodyHtml
+          ? `${wrapClickTracking(bodyHtml)}${unsubscribeHtml}${trackingPixel}`
           : `${wrapClickTracking(fullBody.replace(/\n/g, "<br>"))}${trackingPixel}`;
 
         try {

@@ -57,23 +57,20 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       return null;
     }
 
-    const { data, error } = await supabase.auth.getUser(nextSession.access_token);
-
-    if (error || !data.user) {
+    if (!nextSession.user) {
       setSession(null);
       setUser(null);
       setLoading(false);
-      await supabase.auth.signOut().catch(() => undefined);
       return null;
     }
 
     setSession(nextSession);
-    setUser(data.user);
+    setUser(nextSession.user);
     setLoading(false);
 
-    await ensureProfile(data.user);
+    await ensureProfile(nextSession.user);
 
-    return data.user;
+    return nextSession.user;
   };
 
   useEffect(() => {
