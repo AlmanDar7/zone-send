@@ -22,6 +22,8 @@ export type Database = {
           campaign_id: string
           created_at: string
           delay_days: number
+          delay_unit: string
+          delay_value: number
           id: string
           step_number: number
           subject_a: string | null
@@ -36,6 +38,8 @@ export type Database = {
           campaign_id: string
           created_at?: string
           delay_days?: number
+          delay_unit?: string
+          delay_value?: number
           id?: string
           step_number: number
           subject_a?: string | null
@@ -50,6 +54,8 @@ export type Database = {
           campaign_id?: string
           created_at?: string
           delay_days?: number
+          delay_unit?: string
+          delay_value?: number
           id?: string
           step_number?: number
           subject_a?: string | null
