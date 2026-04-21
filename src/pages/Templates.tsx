@@ -139,6 +139,7 @@ const Templates = () => {
         template_format: form.template_format,
         html_body: form.html_body,
         design_config: form.design_config,
+        blocks: form.blocks as unknown as Database["public"]["Tables"]["email_templates"]["Insert"]["blocks"],
       });
       if (error) throw error;
     },
