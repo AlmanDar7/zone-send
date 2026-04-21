@@ -258,7 +258,7 @@ const SortableBlock = ({
     <div
       ref={setNodeRef}
       style={style}
-      className={`group relative my-1 rounded-md border ${
+      className={`group relative my-1 rounded-md border pl-6 pr-6 ${
         selected ? "border-primary" : "border-transparent hover:border-border"
       }`}
       onClick={(e) => {
@@ -266,18 +266,22 @@ const SortableBlock = ({
         onSelect();
       }}
     >
-      <div className="absolute -left-8 top-1/2 hidden -translate-y-1/2 flex-col gap-1 group-hover:flex">
-        <button
-          type="button"
-          {...attributes}
-          {...listeners}
-          className="cursor-grab rounded bg-background p-1 shadow"
-          title="Drag to reorder"
-        >
-          <GripVertical className="h-3.5 w-3.5 text-muted-foreground" />
-        </button>
+      <div
+        {...attributes}
+        {...listeners}
+        onClick={(e) => e.stopPropagation()}
+        className={`absolute left-0 top-1/2 -translate-y-1/2 flex cursor-grab touch-none items-center rounded bg-background p-1 shadow transition-opacity ${
+          selected ? "opacity-100" : "opacity-0 group-hover:opacity-100"
+        }`}
+        title="Drag to reorder"
+      >
+        <GripVertical className="h-3.5 w-3.5 text-muted-foreground" />
       </div>
-      <div className="absolute -right-8 top-0 hidden flex-col gap-1 group-hover:flex">
+      <div
+        className={`absolute right-0 top-1 flex flex-col gap-1 transition-opacity ${
+          selected ? "opacity-100" : "opacity-0 group-hover:opacity-100"
+        }`}
+      >
         <button
           type="button"
           onClick={(e) => {
