@@ -353,11 +353,25 @@ const Templates = () => {
           />
         </div>
 
-        <Tabs value={form.template_format} onValueChange={(value) => changeFormat(value as TemplateFormat)}>
-          <TabsList className="grid w-full grid-cols-2">
-            <TabsTrigger value="plain">Plain Template</TabsTrigger>
-            <TabsTrigger value="visual">Visual Template</TabsTrigger>
+        <Tabs
+          value={form.template_format}
+          onValueChange={(value) => changeFormat(value as TemplateFormState["template_format"])}
+        >
+          <TabsList className="grid w-full grid-cols-3">
+            <TabsTrigger value="plain">Plain</TabsTrigger>
+            <TabsTrigger value="visual">Visual Preset</TabsTrigger>
+            <TabsTrigger value="blocks">Block Builder</TabsTrigger>
           </TabsList>
+
+          <TabsContent value="blocks" className="space-y-4">
+            {form.blocks ? (
+              <BlockEditor doc={form.blocks} onChange={updateBlocksDoc} />
+            ) : (
+              <div className="rounded-xl border border-dashed border-border p-8 text-center text-sm text-muted-foreground">
+                Loading block editor...
+              </div>
+            )}
+          </TabsContent>
 
           <TabsContent value="plain" className="space-y-4">
             <div className="space-y-2">
