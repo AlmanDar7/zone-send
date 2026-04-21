@@ -139,8 +139,8 @@ const Templates = () => {
         template_format: form.template_format,
         html_body: form.html_body,
         design_config: form.design_config,
-        blocks: form.blocks as unknown as Database["public"]["Tables"]["email_templates"]["Insert"]["blocks"],
-      });
+        ...(form.blocks ? { blocks: form.blocks } : {}),
+      } as Database["public"]["Tables"]["email_templates"]["Insert"]);
       if (error) throw error;
     },
     onSuccess: () => {
@@ -166,7 +166,8 @@ const Templates = () => {
           template_format: form.template_format,
           html_body: form.html_body,
           design_config: form.design_config,
-        })
+          ...(form.blocks ? { blocks: form.blocks } : { blocks: null }),
+        } as Database["public"]["Tables"]["email_templates"]["Update"])
         .eq("id", selectedTemplate.id);
 
       if (error) throw error;
@@ -192,7 +193,10 @@ const Templates = () => {
         template_format: template.template_format,
         html_body: template.html_body,
         design_config: template.design_config,
-      });
+        ...((template as unknown as { blocks?: unknown }).blocks
+          ? { blocks: (template as unknown as { blocks?: unknown }).blocks }
+          : {}),
+      } as Database["public"]["Tables"]["email_templates"]["Insert"]);
 
       if (error) throw error;
     },
@@ -218,7 +222,7 @@ const Templates = () => {
   });
 
   const openCreateWithStarter = (presetId: VisualTemplatePresetId) => {
-    setForm(getStarterTemplate(presetId));
+    setForm({ ...getStarterTemplate(presetId), blocks: null });
     setCreateOpen(true);
   };
 
@@ -244,6 +248,7 @@ const Templates = () => {
       body: starter.body,
       html_body: starter.html_body,
       design_config: starter.design_config,
+      blocks: null,
     }));
   };
 
@@ -268,7 +273,23 @@ const Templates = () => {
     });
   };
 
-  const changeFormat = (format: TemplateFormat) => {
+  const changeFormat = (format: TemplateFormState["template_format"]) => {
+    if (format === "blocks") {
+      setForm((prev) => {
+        const doc = prev.blocks ?? (prev.body ? wrapLegacyAsDocument(prev.body) : createEmptyDocument());
+        const html = renderDocumentHtml(doc);
+        const plain = renderDocumentPlain(doc);
+        return {
+          ...prev,
+          template_format: "blocks",
+          blocks: doc,
+          html_body: html,
+          body: plain || prev.body,
+          design_config: null,
+        };
+      });
+      return;
+    }
     if (format === "visual") {
       applyVisualPreset(form.design_config?.presetId || "lead-magnet");
       return;
@@ -278,6 +299,18 @@ const Templates = () => {
       ...prev,
       template_format: "plain",
       html_body: null,
+      design_config: null,
+      blocks: null,
+    }));
+  };
+
+  const updateBlocksDoc = (doc: TemplateDocument) => {
+    setForm((prev) => ({
+      ...prev,
+      template_format: "blocks",
+      blocks: doc,
+      html_body: renderDocumentHtml(doc),
+      body: renderDocumentPlain(doc),
       design_config: null,
     }));
   };
