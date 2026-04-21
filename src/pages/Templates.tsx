@@ -76,7 +76,9 @@ const isVisualTemplateConfig = (value: unknown): value is VisualTemplateConfig =
 };
 
 const toFormState = (template: EmailTemplateRow): TemplateFormState => {
-  const templateFormat = template.template_format === "visual" ? "visual" : "plain";
+  const rawFormat = template.template_format;
+  const templateFormat: TemplateFormState["template_format"] =
+    rawFormat === "blocks" ? "blocks" : rawFormat === "visual" ? "visual" : "plain";
   const fallbackStarter = getStarterTemplate("lead-magnet");
   const visualConfig = isVisualTemplateConfig(template.design_config)
     ? template.design_config
@@ -87,6 +89,7 @@ const toFormState = (template: EmailTemplateRow): TemplateFormState => {
           body: template.body,
         }
       : null;
+  const blocksDoc = isTemplateDocument(template.blocks) ? (template.blocks as TemplateDocument) : null;
 
   return {
     name: template.name,
@@ -96,6 +99,7 @@ const toFormState = (template: EmailTemplateRow): TemplateFormState => {
     template_format: templateFormat,
     html_body: template.html_body,
     design_config: visualConfig,
+    blocks: blocksDoc,
   };
 };
 
