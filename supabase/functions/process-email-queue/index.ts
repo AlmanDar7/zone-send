@@ -34,6 +34,17 @@ function pickVariant(step: any, existingSentA: number, existingSentB: number): "
   return existingSentA <= existingSentB ? "a" : "b";
 }
 
+function getStepDelayMs(step: any): number {
+  const delayValue = Number.isFinite(step?.delay_value)
+    ? Number(step.delay_value)
+    : Number(step?.delay_days || 0);
+  const safeDelayValue = Math.max(0, delayValue);
+  const delayUnit = step?.delay_unit === "hours" ? "hours" : "days";
+  const unitMs = delayUnit === "hours" ? 60 * 60 * 1000 : 24 * 60 * 60 * 1000;
+
+  return safeDelayValue * unitMs;
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
@@ -117,7 +128,7 @@ serve(async (req) => {
           if (completedSteps.has(step.step_number)) continue;
 
           const scheduledDate = new Date(contact.date_added);
-          scheduledDate.setDate(scheduledDate.getDate() + step.delay_days);
+          scheduledDate.setTime(scheduledDate.getTime() + getStepDelayMs(step));
 
           if (scheduledDate <= new Date()) {
             let variant: string | null = null;

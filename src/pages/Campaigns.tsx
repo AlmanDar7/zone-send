@@ -10,6 +10,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { motion, AnimatePresence } from "framer-motion";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
+import type { Database } from "@/integrations/supabase/types";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 
@@ -22,10 +23,32 @@ const statusColors: Record<string, string> = {
 
 const stepLabels: Record<number, string> = {
   1: "Initial Email",
-  2: "Follow-Up 1 (+2 days)",
-  3: "Follow-Up 2 (+4 days)",
-  4: "Follow-Up 3 (+7 days)",
-  5: "Final Follow-Up (+14 days)",
+  2: "Follow-Up 1",
+  3: "Follow-Up 2",
+  4: "Follow-Up 3",
+  5: "Final Follow-Up",
+};
+
+type CampaignStep = Database["public"]["Tables"]["campaign_steps"]["Row"];
+type TimingDraft = { value: string; unit: "days" | "hours" };
+
+const getStepTiming = (step: CampaignStep) => ({
+  value:
+    typeof step.delay_value === "number"
+      ? step.delay_value
+      : typeof step.delay_days === "number"
+        ? step.delay_days
+        : 0,
+  unit: step.delay_unit === "hours" ? "hours" : "days",
+});
+
+const formatStepDelay = (step: CampaignStep) => {
+  const timing = getStepTiming(step);
+
+  if (timing.value === 0) return "Send immediately";
+
+  const suffix = timing.value === 1 ? timing.unit.slice(0, -1) : timing.unit;
+  return `Send after ${timing.value} ${suffix}`;
 };
 
 const Campaigns = () => {
@@ -36,6 +59,7 @@ const Campaigns = () => {
   const [newName, setNewName] = useState("");
   const [dailyLimit, setDailyLimit] = useState("500");
   const [expandedCampaign, setExpandedCampaign] = useState<string | null>(null);
+  const [timingDrafts, setTimingDrafts] = useState<Record<string, TimingDraft>>({});
 
   const { data: campaigns = [], isLoading } = useQuery({
     queryKey: ["campaigns", user?.id],
@@ -80,11 +104,11 @@ const Campaigns = () => {
       if (error) throw error;
 
       const defaultSteps = [
-        { campaign_id: data.id, step_number: 1, delay_days: 0 },
-        { campaign_id: data.id, step_number: 2, delay_days: 2 },
-        { campaign_id: data.id, step_number: 3, delay_days: 4 },
-        { campaign_id: data.id, step_number: 4, delay_days: 7 },
-        { campaign_id: data.id, step_number: 5, delay_days: 14 },
+        { campaign_id: data.id, step_number: 1, delay_days: 0, delay_value: 0, delay_unit: "days" },
+        { campaign_id: data.id, step_number: 2, delay_days: 2, delay_value: 2, delay_unit: "days" },
+        { campaign_id: data.id, step_number: 3, delay_days: 4, delay_value: 4, delay_unit: "days" },
+        { campaign_id: data.id, step_number: 4, delay_days: 7, delay_value: 7, delay_unit: "days" },
+        { campaign_id: data.id, step_number: 5, delay_days: 14, delay_value: 14, delay_unit: "days" },
       ];
       await supabase.from("campaign_steps").insert(defaultSteps);
     },
@@ -109,6 +133,25 @@ const Campaigns = () => {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["campaign-steps"] });
       toast.success("Template assigned!");
+    },
+    onError: (err: any) => toast.error(err.message),
+  });
+
+  const updateStepTiming = useMutation({
+    mutationFn: async ({ stepId, delayValue, delayUnit }: { stepId: string; delayValue: number; delayUnit: "days" | "hours" }) => {
+      const { error } = await supabase
+        .from("campaign_steps")
+        .update({
+          delay_value: delayValue,
+          delay_unit: delayUnit,
+          delay_days: delayUnit === "days" ? delayValue : 0,
+        })
+        .eq("id", stepId);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["campaign-steps"] });
+      toast.success("Follow-up timing updated!");
     },
     onError: (err: any) => toast.error(err.message),
   });
@@ -149,6 +192,12 @@ const Campaigns = () => {
     return t ? t.name : null;
   };
 
+  const getTimingDraft = (step: CampaignStep): TimingDraft =>
+    timingDrafts[step.id] || {
+      value: String(getStepTiming(step).value),
+      unit: getStepTiming(step).unit,
+    };
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -171,7 +220,7 @@ const Campaigns = () => {
                 <Label>Daily Sending Limit</Label>
                 <Input type="number" value={dailyLimit} onChange={(e) => setDailyLimit(e.target.value)} />
               </div>
-              <p className="text-xs text-muted-foreground">5 follow-up steps will be created automatically (0, 2, 4, 7, 14 days). Assign templates after creation.</p>
+              <p className="text-xs text-muted-foreground">5 follow-up steps will be created automatically. You can customize each step timing in hours or days after creation.</p>
               <Button onClick={() => createCampaign.mutate()} disabled={createCampaign.isPending || !newName}>
                 {createCampaign.isPending ? "Creating..." : "Create Campaign"}
               </Button>
@@ -260,10 +309,11 @@ const Campaigns = () => {
                         {steps.length === 0 ? (
                           <p className="text-sm text-muted-foreground">No steps found for this campaign.</p>
                         ) : (
-                          steps.map((step: any) => {
+                          steps.map((step: CampaignStep) => {
                             const templateName = getTemplateName(step.template_id);
+                            const timingDraft = getTimingDraft(step);
                             return (
-                              <div key={step.id} className="flex items-center gap-3 rounded-lg border border-border bg-background p-3">
+                              <div key={step.id} className="flex items-start gap-3 rounded-lg border border-border bg-background p-3">
                                 <div className="flex items-center justify-center w-8 h-8 rounded-full bg-primary/10 text-primary text-sm font-semibold shrink-0">
                                   {step.step_number}
                                 </div>
@@ -271,33 +321,82 @@ const Campaigns = () => {
                                   <p className="text-sm font-medium text-foreground">
                                     {stepLabels[step.step_number] || `Step ${step.step_number}`}
                                   </p>
+                                  <p className="text-xs text-muted-foreground mt-0.5">{formatStepDelay(step)}</p>
                                   {templateName && (
                                     <p className="text-xs text-muted-foreground flex items-center gap-1 mt-0.5">
                                       <Mail className="w-3 h-3" /> {templateName}
                                     </p>
                                   )}
                                 </div>
-                                <Select
-                                  value={step.template_id || "none"}
-                                  onValueChange={(val) =>
-                                    assignTemplate.mutate({
-                                      stepId: step.id,
-                                      templateId: val === "none" ? null : val,
-                                    })
-                                  }
-                                >
-                                  <SelectTrigger className="w-[200px] h-9 text-sm">
-                                    <SelectValue placeholder="Assign template" />
-                                  </SelectTrigger>
-                                  <SelectContent>
-                                    <SelectItem value="none">No template</SelectItem>
-                                    {templates.map((t: any) => (
-                                      <SelectItem key={t.id} value={t.id}>
-                                        {t.name} ({t.type})
-                                      </SelectItem>
-                                    ))}
-                                  </SelectContent>
-                                </Select>
+                                <div className="flex flex-col gap-2 sm:flex-row sm:items-start">
+                                  <div className="flex items-center gap-2">
+                                    <Input
+                                      type="number"
+                                      min="0"
+                                      value={timingDraft.value}
+                                      onChange={(e) =>
+                                        setTimingDrafts((prev) => ({
+                                          ...prev,
+                                          [step.id]: { ...timingDraft, value: e.target.value },
+                                        }))
+                                      }
+                                      className="w-20 h-9 text-sm"
+                                    />
+                                    <Select
+                                      value={timingDraft.unit}
+                                      onValueChange={(value) =>
+                                        setTimingDrafts((prev) => ({
+                                          ...prev,
+                                          [step.id]: { ...timingDraft, unit: value as "days" | "hours" },
+                                        }))
+                                      }
+                                    >
+                                      <SelectTrigger className="w-[100px] h-9 text-sm">
+                                        <SelectValue />
+                                      </SelectTrigger>
+                                      <SelectContent>
+                                        <SelectItem value="days">Days</SelectItem>
+                                        <SelectItem value="hours">Hours</SelectItem>
+                                      </SelectContent>
+                                    </Select>
+                                    <Button
+                                      size="sm"
+                                      variant="outline"
+                                      className="h-9"
+                                      onClick={() =>
+                                        updateStepTiming.mutate({
+                                          stepId: step.id,
+                                          delayValue: Math.max(0, parseInt(timingDraft.value || "0", 10) || 0),
+                                          delayUnit: timingDraft.unit,
+                                        })
+                                      }
+                                      disabled={updateStepTiming.isPending}
+                                    >
+                                      Save timing
+                                    </Button>
+                                  </div>
+                                  <Select
+                                    value={step.template_id || "none"}
+                                    onValueChange={(val) =>
+                                      assignTemplate.mutate({
+                                        stepId: step.id,
+                                        templateId: val === "none" ? null : val,
+                                      })
+                                    }
+                                  >
+                                    <SelectTrigger className="w-[200px] h-9 text-sm">
+                                      <SelectValue placeholder="Assign template" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                      <SelectItem value="none">No template</SelectItem>
+                                      {templates.map((t: any) => (
+                                        <SelectItem key={t.id} value={t.id}>
+                                          {t.name} ({t.type})
+                                        </SelectItem>
+                                      ))}
+                                    </SelectContent>
+                                  </Select>
+                                </div>
                               </div>
                             );
                           })

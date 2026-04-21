@@ -51,6 +51,9 @@ const Contacts = () => {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [bulkAssignOpen, setBulkAssignOpen] = useState(false);
   const [bulkCampaignId, setBulkCampaignId] = useState("none");
+  const [renameContactOpen, setRenameContactOpen] = useState(false);
+  const [renameContactId, setRenameContactId] = useState<string | null>(null);
+  const [renameContactValue, setRenameContactValue] = useState("");
 
   // Folder state
   const [activeFolder, setActiveFolder] = useState<string | null>(null); // null = "All Contacts"
@@ -242,6 +245,21 @@ const Contacts = () => {
       setSelectedContact(null);
       setSelectedCampaignId("none");
       toast.success("Contact campaign updated!");
+    },
+    onError: (err: any) => toast.error(err.message),
+  });
+
+  const renameContact = useMutation({
+    mutationFn: async ({ id, name }: { id: string; name: string }) => {
+      const { error } = await supabase.from("contacts").update({ name }).eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["contacts"] });
+      setRenameContactOpen(false);
+      setRenameContactId(null);
+      setRenameContactValue("");
+      toast.success("Contact name updated!");
     },
     onError: (err: any) => toast.error(err.message),
   });
@@ -442,6 +460,40 @@ const Contacts = () => {
             </div>
             <Button onClick={() => selectedContact && linkContactCampaign.mutate({ contactId: selectedContact.id, campaignId: selectedCampaignId })} disabled={!selectedContact || linkContactCampaign.isPending}>
               {linkContactCampaign.isPending ? "Saving..." : "Save Campaign"}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={renameContactOpen}
+        onOpenChange={(open) => {
+          setRenameContactOpen(open);
+          if (!open) {
+            setRenameContactId(null);
+            setRenameContactValue("");
+          }
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="font-display">Rename Contact</DialogTitle>
+            <DialogDescription>Change the contact name shown in your lists and campaigns.</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label>Contact Name</Label>
+              <Input
+                value={renameContactValue}
+                onChange={(e) => setRenameContactValue(e.target.value)}
+                placeholder="John Doe"
+              />
+            </div>
+            <Button
+              onClick={() => renameContactId && renameContact.mutate({ id: renameContactId, name: renameContactValue.trim() })}
+              disabled={renameContact.isPending || !renameContactId || !renameContactValue.trim()}
+            >
+              {renameContact.isPending ? "Saving..." : "Save Name"}
             </Button>
           </div>
         </DialogContent>
@@ -781,6 +833,9 @@ const Contacts = () => {
                       <button className="p-1 rounded hover:bg-muted transition-colors"><MoreHorizontal className="w-4 h-4 text-muted-foreground" /></button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end">
+                      <DropdownMenuItem onClick={() => { setRenameContactId(c.id); setRenameContactValue(c.name || ""); setRenameContactOpen(true); }}>
+                        <Pencil className="w-4 h-4 mr-2" />Edit name
+                      </DropdownMenuItem>
                       <DropdownMenuItem onClick={() => { setSelectedContact(c); setSelectedCampaignId(c.campaign_id || "none"); setLinkOpen(true); }}>
                         <Link className="w-4 h-4 mr-2" />Assign campaign
                       </DropdownMenuItem>
