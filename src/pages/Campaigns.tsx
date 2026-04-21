@@ -32,7 +32,7 @@ const stepLabels: Record<number, string> = {
 type CampaignStep = Database["public"]["Tables"]["campaign_steps"]["Row"];
 type TimingDraft = { value: string; unit: "days" | "hours" };
 
-const getStepTiming = (step: CampaignStep) => ({
+const getStepTiming = (step: CampaignStep): { value: number; unit: "days" | "hours" } => ({
   value:
     typeof step.delay_value === "number"
       ? step.delay_value
