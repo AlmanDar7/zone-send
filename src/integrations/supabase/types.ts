@@ -14,6 +14,51 @@ export type Database = {
   }
   public: {
     Tables: {
+      brand_themes: {
+        Row: {
+          background_color: string
+          body_font: string
+          brand_name: string
+          button_style: Json
+          created_at: string
+          footer_style: Json
+          heading_font: string
+          id: string
+          name: string
+          primary_color: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          background_color?: string
+          body_font?: string
+          brand_name?: string
+          button_style?: Json
+          created_at?: string
+          footer_style?: Json
+          heading_font?: string
+          id?: string
+          name: string
+          primary_color?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          background_color?: string
+          body_font?: string
+          brand_name?: string
+          button_style?: Json
+          created_at?: string
+          footer_style?: Json
+          heading_font?: string
+          id?: string
+          name?: string
+          primary_color?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       campaign_steps: {
         Row: {
           ab_test_enabled: boolean | null
@@ -358,6 +403,7 @@ export type Database = {
       }
       email_templates: {
         Row: {
+          blocks: Json | null
           body: string
           created_at: string
           design_config: Json | null
@@ -371,6 +417,7 @@ export type Database = {
           user_id: string
         }
         Insert: {
+          blocks?: Json | null
           body: string
           created_at?: string
           design_config?: Json | null
@@ -384,6 +431,7 @@ export type Database = {
           user_id: string
         }
         Update: {
+          blocks?: Json | null
           body?: string
           created_at?: string
           design_config?: Json | null
@@ -527,6 +575,36 @@ export type Database = {
           use_ssl?: boolean
           user_id?: string
           username?: string
+        }
+        Relationships: []
+      }
+      template_sections: {
+        Row: {
+          blocks: Json
+          category: string
+          created_at: string
+          id: string
+          name: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          blocks?: Json
+          category?: string
+          created_at?: string
+          id?: string
+          name: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          blocks?: Json
+          category?: string
+          created_at?: string
+          id?: string
+          name?: string
+          updated_at?: string
+          user_id?: string
         }
         Relationships: []
       }

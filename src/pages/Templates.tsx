@@ -16,6 +16,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import AIEmailWriter from "@/components/AIEmailWriter";
 import TemplatePreview from "@/components/TemplatePreview";
+import BlockEditor from "@/components/BlockEditor";
 import {
   buildVisualTemplateContent,
   getStarterTemplate,
@@ -27,6 +28,14 @@ import {
   type VisualTemplatePresetId,
   visualTemplatePresets,
 } from "@/lib/template-presets";
+import {
+  createEmptyDocument,
+  isTemplateDocument,
+  renderDocumentHtml,
+  renderDocumentPlain,
+  wrapLegacyAsDocument,
+  type TemplateDocument,
+} from "@/lib/template-blocks";
 
 const variables = ["{{FirstName}}", "{{Email}}", "{{CompanyName}}"];
 const typeColors: Record<string, string> = {
@@ -44,9 +53,10 @@ type TemplateFormState = {
   subject: string;
   body: string;
   type: string;
-  template_format: TemplateFormat;
+  template_format: TemplateFormat | "blocks";
   html_body: string | null;
   design_config: VisualTemplateConfig | null;
+  blocks: TemplateDocument | null;
 };
 
 const createEmptyForm = (): TemplateFormState => ({
@@ -57,6 +67,7 @@ const createEmptyForm = (): TemplateFormState => ({
   template_format: "plain",
   html_body: null,
   design_config: null,
+  blocks: null,
 });
 
 const isVisualTemplateConfig = (value: unknown): value is VisualTemplateConfig => {
@@ -65,7 +76,9 @@ const isVisualTemplateConfig = (value: unknown): value is VisualTemplateConfig =
 };
 
 const toFormState = (template: EmailTemplateRow): TemplateFormState => {
-  const templateFormat = template.template_format === "visual" ? "visual" : "plain";
+  const rawFormat = template.template_format;
+  const templateFormat: TemplateFormState["template_format"] =
+    rawFormat === "blocks" ? "blocks" : rawFormat === "visual" ? "visual" : "plain";
   const fallbackStarter = getStarterTemplate("lead-magnet");
   const visualConfig = isVisualTemplateConfig(template.design_config)
     ? template.design_config
@@ -76,6 +89,7 @@ const toFormState = (template: EmailTemplateRow): TemplateFormState => {
           body: template.body,
         }
       : null;
+  const blocksDoc = isTemplateDocument(template.blocks) ? (template.blocks as TemplateDocument) : null;
 
   return {
     name: template.name,
@@ -85,6 +99,7 @@ const toFormState = (template: EmailTemplateRow): TemplateFormState => {
     template_format: templateFormat,
     html_body: template.html_body,
     design_config: visualConfig,
+    blocks: blocksDoc,
   };
 };
 
@@ -124,7 +139,8 @@ const Templates = () => {
         template_format: form.template_format,
         html_body: form.html_body,
         design_config: form.design_config,
-      });
+        ...(form.blocks ? { blocks: form.blocks } : {}),
+      } as Database["public"]["Tables"]["email_templates"]["Insert"]);
       if (error) throw error;
     },
     onSuccess: () => {
@@ -150,7 +166,8 @@ const Templates = () => {
           template_format: form.template_format,
           html_body: form.html_body,
           design_config: form.design_config,
-        })
+          ...(form.blocks ? { blocks: form.blocks } : { blocks: null }),
+        } as Database["public"]["Tables"]["email_templates"]["Update"])
         .eq("id", selectedTemplate.id);
 
       if (error) throw error;
@@ -176,7 +193,10 @@ const Templates = () => {
         template_format: template.template_format,
         html_body: template.html_body,
         design_config: template.design_config,
-      });
+        ...((template as unknown as { blocks?: unknown }).blocks
+          ? { blocks: (template as unknown as { blocks?: unknown }).blocks }
+          : {}),
+      } as Database["public"]["Tables"]["email_templates"]["Insert"]);
 
       if (error) throw error;
     },
@@ -202,7 +222,7 @@ const Templates = () => {
   });
 
   const openCreateWithStarter = (presetId: VisualTemplatePresetId) => {
-    setForm(getStarterTemplate(presetId));
+    setForm({ ...getStarterTemplate(presetId), blocks: null });
     setCreateOpen(true);
   };
 
@@ -228,6 +248,7 @@ const Templates = () => {
       body: starter.body,
       html_body: starter.html_body,
       design_config: starter.design_config,
+      blocks: null,
     }));
   };
 
@@ -252,7 +273,23 @@ const Templates = () => {
     });
   };
 
-  const changeFormat = (format: TemplateFormat) => {
+  const changeFormat = (format: TemplateFormState["template_format"]) => {
+    if (format === "blocks") {
+      setForm((prev) => {
+        const doc = prev.blocks ?? (prev.body ? wrapLegacyAsDocument(prev.body) : createEmptyDocument());
+        const html = renderDocumentHtml(doc);
+        const plain = renderDocumentPlain(doc);
+        return {
+          ...prev,
+          template_format: "blocks",
+          blocks: doc,
+          html_body: html,
+          body: plain || prev.body,
+          design_config: null,
+        };
+      });
+      return;
+    }
     if (format === "visual") {
       applyVisualPreset(form.design_config?.presetId || "lead-magnet");
       return;
@@ -262,6 +299,18 @@ const Templates = () => {
       ...prev,
       template_format: "plain",
       html_body: null,
+      design_config: null,
+      blocks: null,
+    }));
+  };
+
+  const updateBlocksDoc = (doc: TemplateDocument) => {
+    setForm((prev) => ({
+      ...prev,
+      template_format: "blocks",
+      blocks: doc,
+      html_body: renderDocumentHtml(doc),
+      body: renderDocumentPlain(doc),
       design_config: null,
     }));
   };
@@ -304,11 +353,25 @@ const Templates = () => {
           />
         </div>
 
-        <Tabs value={form.template_format} onValueChange={(value) => changeFormat(value as TemplateFormat)}>
-          <TabsList className="grid w-full grid-cols-2">
-            <TabsTrigger value="plain">Plain Template</TabsTrigger>
-            <TabsTrigger value="visual">Visual Template</TabsTrigger>
+        <Tabs
+          value={form.template_format}
+          onValueChange={(value) => changeFormat(value as TemplateFormState["template_format"])}
+        >
+          <TabsList className="grid w-full grid-cols-3">
+            <TabsTrigger value="plain">Plain</TabsTrigger>
+            <TabsTrigger value="visual">Visual Preset</TabsTrigger>
+            <TabsTrigger value="blocks">Block Builder</TabsTrigger>
           </TabsList>
+
+          <TabsContent value="blocks" className="space-y-4">
+            {form.blocks ? (
+              <BlockEditor doc={form.blocks} onChange={updateBlocksDoc} />
+            ) : (
+              <div className="rounded-xl border border-dashed border-border p-8 text-center text-sm text-muted-foreground">
+                Loading block editor...
+              </div>
+            )}
+          </TabsContent>
 
           <TabsContent value="plain" className="space-y-4">
             <div className="space-y-2">
