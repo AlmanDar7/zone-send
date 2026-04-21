@@ -16,6 +16,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import AIEmailWriter from "@/components/AIEmailWriter";
 import TemplatePreview from "@/components/TemplatePreview";
+import BlockEditor from "@/components/BlockEditor";
 import {
   buildVisualTemplateContent,
   getStarterTemplate,
@@ -27,6 +28,14 @@ import {
   type VisualTemplatePresetId,
   visualTemplatePresets,
 } from "@/lib/template-presets";
+import {
+  createEmptyDocument,
+  isTemplateDocument,
+  renderDocumentHtml,
+  renderDocumentPlain,
+  wrapLegacyAsDocument,
+  type TemplateDocument,
+} from "@/lib/template-blocks";
 
 const variables = ["{{FirstName}}", "{{Email}}", "{{CompanyName}}"];
 const typeColors: Record<string, string> = {
@@ -44,9 +53,10 @@ type TemplateFormState = {
   subject: string;
   body: string;
   type: string;
-  template_format: TemplateFormat;
+  template_format: TemplateFormat | "blocks";
   html_body: string | null;
   design_config: VisualTemplateConfig | null;
+  blocks: TemplateDocument | null;
 };
 
 const createEmptyForm = (): TemplateFormState => ({
@@ -57,6 +67,7 @@ const createEmptyForm = (): TemplateFormState => ({
   template_format: "plain",
   html_body: null,
   design_config: null,
+  blocks: null,
 });
 
 const isVisualTemplateConfig = (value: unknown): value is VisualTemplateConfig => {
