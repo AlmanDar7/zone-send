@@ -316,7 +316,9 @@ const Templates = () => {
   };
 
   const renderEditor = (onSubmit: () => void, submitLabel: string, isPending: boolean) => (
-    <div className="grid gap-6 lg:grid-cols-[1.1fr_0.9fr]">
+    <div
+      className={`grid gap-6 ${form.template_format === "blocks" ? "xl:grid-cols-[minmax(0,1.75fr)_380px]" : "lg:grid-cols-[1.1fr_0.9fr]"}`}
+    >
       <div className="space-y-5">
         <div className="grid gap-4 sm:grid-cols-2">
           <div className="space-y-2">
@@ -630,7 +632,7 @@ const Templates = () => {
         <TemplatePreview
           html={form.html_body}
           body={form.body || "Start typing to see the preview."}
-          className="min-h-[540px]"
+          className={`${form.template_format === "blocks" ? "min-h-[760px]" : "min-h-[540px]"}`}
           variables={previewVariables}
         />
       </div>
@@ -653,7 +655,7 @@ const Templates = () => {
               New Template
             </Button>
           </DialogTrigger>
-          <DialogContent className="max-h-[90vh] max-w-6xl overflow-y-auto">
+          <DialogContent className="max-h-[94vh] max-w-[96vw] overflow-y-auto">
             <DialogHeader>
               <DialogTitle className="font-display">Create Template</DialogTitle>
             </DialogHeader>
@@ -759,7 +761,7 @@ const Templates = () => {
       )}
 
       <Dialog open={editOpen} onOpenChange={setEditOpen}>
-        <DialogContent className="max-h-[90vh] max-w-6xl overflow-y-auto">
+        <DialogContent className="max-h-[94vh] max-w-[96vw] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="font-display">Edit Template</DialogTitle>
           </DialogHeader>

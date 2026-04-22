@@ -148,7 +148,7 @@ const BlockEditor = ({ doc, onChange }: Props) => {
   };
 
   return (
-    <div className="grid gap-4 lg:grid-cols-[260px_1fr_320px]">
+    <div className="grid gap-4 xl:grid-cols-[240px_minmax(0,1.6fr)_320px] 2xl:grid-cols-[260px_minmax(0,1.9fr)_360px]">
       {/* Add blocks panel */}
       <div className="space-y-3 rounded-xl border border-border bg-muted/20 p-3">
         <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Add block</p>
@@ -172,13 +172,13 @@ const BlockEditor = ({ doc, onChange }: Props) => {
 
       {/* Canvas */}
       <div
-        className="min-h-[500px] rounded-xl border border-border p-4"
+        className="min-h-[620px] rounded-xl border border-border p-4 xl:p-6"
         style={{ background: doc.background }}
       >
         <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
           <SortableContext items={doc.blocks.map((b) => b.id)} strategy={verticalListSortingStrategy}>
             <div
-              className="mx-auto rounded-lg p-4"
+              className="mx-auto rounded-lg p-4 xl:p-6"
               style={{
                 background: doc.contentBackground,
                 maxWidth: doc.width,
