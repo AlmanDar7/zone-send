@@ -26,6 +26,8 @@ import { toast } from "sonner";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
 import * as XLSX from "xlsx";
+import { startQueueProcessor } from "@/lib/queueProcessor";
+import { getSmtpConfigError, hasUsableSmtpConfig } from "@/lib/smtpValidation";
 
 import StepIndicator from "@/components/wizard/StepIndicator";
 import SuccessModal from "@/components/wizard/SuccessModal";
@@ -351,6 +353,7 @@ const CampaignWizard = () => {
       if (recipientIds.length === 0) throw new Error("Select at least one recipient");
       if (!campaignName) throw new Error("Campaign name required");
       if (!subject) throw new Error("Subject required");
+      if (!hasUsableSmtpConfig(smtp)) throw new Error(getSmtpConfigError());
 
       let scheduledAt = new Date();
       if (sendMode === "later") {
@@ -422,17 +425,32 @@ const CampaignWizard = () => {
         if (qErr) throw qErr;
       }
 
-      // Trigger processor immediately if sending now
+      let continuedInBackground = false;
+      let failed = 0;
+
+      // Trigger processor immediately if sending now, but don't block the UI indefinitely.
       if (sendMode === "now") {
-        await supabase.functions.invoke("process-email-queue", { body: { campaignId: campaign.id } });
+        const queueProcessor = await startQueueProcessor(campaign.id);
+        continuedInBackground = queueProcessor.continuedInBackground;
+        failed = queueProcessor.failed;
       }
 
-      return { campaignId: campaign.id, scheduledAt: sendMode === "later" ? scheduledAt : null };
+      return {
+        campaignId: campaign.id,
+        scheduledAt: sendMode === "later" ? scheduledAt : null,
+        continuedInBackground,
+        failed,
+      };
     },
-    onSuccess: ({ campaignId, scheduledAt }) => {
+    onSuccess: ({ campaignId, scheduledAt, continuedInBackground, failed }) => {
       setCreatedCampaignId(campaignId);
       setSuccessMeta({ recipients: recipientIds.length, scheduledAt });
       setSuccessOpen(true);
+      if (continuedInBackground) {
+        toast.success("Campaign started. Delivery is continuing in the background.");
+      } else if (failed > 0) {
+        toast.error(`${failed} email${failed === 1 ? "" : "s"} failed to send. Check Email Queue for the error details.`);
+      }
     },
     onError: (e: Error) => toast.error(e.message),
   });

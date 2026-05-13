@@ -82,6 +82,7 @@ serve(async (req) => {
 
     let totalQueued = 0;
     let totalProcessed = 0;
+    let totalFailed = 0;
 
     for (const campaign of campaigns) {
       const [{ data: steps, error: stepsError }, { data: contacts, error: contactsError }, { data: limits, error: limitsError }] = await Promise.all([
@@ -190,6 +191,9 @@ serve(async (req) => {
 
       if (smtpError || !smtp) {
         console.error(`Missing SMTP settings for user ${campaign.user_id}`);
+        if (campaignId) {
+          throw new Error("SMTP settings not configured. Go to Settings and save your SMTP credentials before sending.");
+        }
         continue;
       }
 
@@ -291,6 +295,7 @@ serve(async (req) => {
           }
         } catch (sendError: any) {
           console.error(`Failed to send queue ${email.id} to ${contact.email}:`, sendError?.message || sendError);
+          totalFailed += 1;
 
           await supabase
             .from("email_queue")
@@ -308,7 +313,7 @@ serve(async (req) => {
       }
     }
 
-    return new Response(JSON.stringify({ success: true, queued: totalQueued, processed: totalProcessed }), {
+    return new Response(JSON.stringify({ success: true, queued: totalQueued, processed: totalProcessed, failed: totalFailed }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   } catch (error: any) {

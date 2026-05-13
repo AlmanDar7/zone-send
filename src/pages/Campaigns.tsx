@@ -13,6 +13,8 @@ import { supabase } from "@/integrations/supabase/client";
 import type { Database } from "@/integrations/supabase/types";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
+import { startQueueProcessor } from "@/lib/queueProcessor";
+import { getSmtpConfigError, hasUsableSmtpConfig } from "@/lib/smtpValidation";
 
 const statusColors: Record<string, string> = {
   Running: "bg-success/10 text-success",
@@ -94,6 +96,16 @@ const Campaigns = () => {
     enabled: !!user,
   });
 
+  const { data: smtpSettings } = useQuery({
+    queryKey: ["campaigns-smtp", user?.id],
+    queryFn: async () => {
+      const { data, error } = await supabase.from("smtp_settings").select("*").maybeSingle();
+      if (error) throw error;
+      return data;
+    },
+    enabled: !!user,
+  });
+
   const createCampaign = useMutation({
     mutationFn: async () => {
       const { data, error } = await supabase
@@ -158,15 +170,31 @@ const Campaigns = () => {
 
   const updateStatus = useMutation({
     mutationFn: async ({ id, status }: { id: string; status: string }) => {
+      if (status === "Running" && !hasUsableSmtpConfig(smtpSettings)) {
+        throw new Error(getSmtpConfigError());
+      }
+
       const { error } = await supabase.from("campaigns").update({ status }).eq("id", id);
       if (error) throw error;
 
       if (status === "Running") {
-        await supabase.functions.invoke("process-email-queue", { body: { campaignId: id } });
+        return startQueueProcessor(id);
       }
+
+      return { continuedInBackground: false, failed: 0 };
     },
-    onSuccess: () => {
+    onSuccess: ({ continuedInBackground, failed }) => {
       queryClient.invalidateQueries({ queryKey: ["campaigns"] });
+      if (continuedInBackground) {
+        toast.success("Campaign updated. Email processing is continuing in the background.");
+        return;
+      }
+
+      if (failed > 0) {
+        toast.error(`${failed} email${failed === 1 ? "" : "s"} failed to send. Check Email Queue for the error details.`);
+        return;
+      }
+
       toast.success("Campaign updated!");
     },
     onError: (err: any) => toast.error(err.message),

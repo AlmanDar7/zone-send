@@ -41,7 +41,7 @@ const SuccessModal = ({
           className="mt-6 space-y-2"
         >
           <h2 className="font-display text-2xl font-bold text-foreground">
-            {scheduledAt ? "Email Scheduled!" : "Email Sent Successfully"}
+            {scheduledAt ? "Email Scheduled!" : "Campaign Started"}
           </h2>
           <p className="text-sm text-muted-foreground">
             Your campaign is on its way to {recipients.toLocaleString()} recipient{recipients === 1 ? "" : "s"}.
@@ -57,7 +57,7 @@ const SuccessModal = ({
           <Row label="Campaign" value={campaignName} />
           <Row label="Recipients" value={recipients.toLocaleString()} />
           <Row
-            label={scheduledAt ? "Scheduled for" : "Sent at"}
+            label={scheduledAt ? "Scheduled for" : "Started at"}
             value={(scheduledAt || new Date()).toLocaleString()}
           />
         </motion.div>

@@ -2,7 +2,7 @@ import { useState } from "react";
 import { NavLink, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import {
-  LayoutDashboard, Mail, FileText, GitBranch, Users, BarChart3,
+  LayoutDashboard, Mail, FileText, GitBranch, Users, BarChart3, Megaphone,
   Settings, LogOut, UserCircle2, Menu, X, Sparkles,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -12,7 +12,8 @@ const mainItems = [
   { to: "/emails", icon: Mail, label: "Emails" },
   { to: "/forms", icon: FileText, label: "Forms" },
   { to: "/workflows", icon: GitBranch, label: "Workflows" },
-  { to: "/audience", icon: Users, label: "Audience" },
+  { to: "/campaigns", icon: Megaphone, label: "Campaigns" },
+  { to: "/contacts", icon: Users, label: "Contacts" },
   { to: "/analytics", icon: BarChart3, label: "Analytics" },
 ];
 
@@ -35,8 +36,9 @@ const AppSidebar = () => {
   const renderItem = (item: typeof mainItems[number]) => {
     const isActive =
       location.pathname === item.to ||
+      (item.to === "/campaigns" && location.pathname.startsWith("/campaigns")) ||
       (item.to === "/emails" && location.pathname.startsWith("/templates")) ||
-      (item.to === "/audience" && location.pathname.startsWith("/contacts"));
+      (item.to === "/contacts" && location.pathname.startsWith("/audience"));
     return (
       <NavLink
         key={item.to}

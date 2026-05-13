@@ -23,7 +23,6 @@ import NotFound from "@/pages/NotFound";
 import Emails from "@/pages/Emails";
 import Forms from "@/pages/Forms";
 import Workflows from "@/pages/Workflows";
-import Audience from "@/pages/Audience";
 import CampaignWizard from "@/pages/CampaignWizard";
 
 const queryClient = new QueryClient();
@@ -43,8 +42,8 @@ const App = () => (
             <Route path="/" element={<Navigate to="/dashboard" replace />} />
             <Route element={<ProtectedRoute><AppLayout /></ProtectedRoute>}>
               <Route path="/dashboard" element={<Dashboard />} />
-              <Route path="/contacts" element={<Navigate to="/audience" replace />} />
-              <Route path="/audience" element={<Audience />} />
+              <Route path="/contacts" element={<Contacts />} />
+              <Route path="/audience" element={<Navigate to="/contacts" replace />} />
               <Route path="/emails" element={<Emails />} />
               <Route path="/forms" element={<Forms />} />
               <Route path="/workflows" element={<Workflows />} />

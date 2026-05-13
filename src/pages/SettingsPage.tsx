@@ -10,6 +10,8 @@ import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
+import { getSmtpConfigError, hasUsableSmtpConfig } from "@/lib/smtpValidation";
+import { getSupabaseFunctionErrorMessage } from "@/lib/supabaseFunctionErrors";
 
 const SettingsPage = () => {
   const { user } = useAuth();
@@ -17,6 +19,7 @@ const SettingsPage = () => {
 
   const [smtp, setSmtp] = useState({ host: "premium26.web-hosting.com", port: "465", username: "", password: "", from_name: "", from_email: "", use_ssl: true });
   const [showPassword, setShowPassword] = useState(false);
+  const [testEmail, setTestEmail] = useState("");
   const [sheet, setSheet] = useState({ sheet_url: "", service_account_json: "" });
   const [limit, setLimit] = useState("500");
 
@@ -55,6 +58,12 @@ const SettingsPage = () => {
   }, [smtpData]);
 
   useEffect(() => {
+    if (!testEmail) {
+      setTestEmail(user?.email || "");
+    }
+  }, [user, testEmail]);
+
+  useEffect(() => {
     if (sheetData) setSheet({ sheet_url: sheetData.sheet_url || "", service_account_json: sheetData.service_account_json || "" });
   }, [sheetData]);
 
@@ -62,19 +71,74 @@ const SettingsPage = () => {
     if (limitData) setLimit(String(limitData.max_per_day));
   }, [limitData]);
 
+  const upsertSmtpSettings = async () => {
+    const payload = {
+      user_id: user!.id,
+      host: smtp.host,
+      port: parseInt(smtp.port, 10),
+      username: smtp.username,
+      password: smtp.password,
+      from_name: smtp.from_name,
+      from_email: smtp.from_email,
+      use_ssl: smtp.use_ssl,
+    };
+
+    if (!hasUsableSmtpConfig({ ...payload, port: Number.isFinite(payload.port) ? payload.port : 0 })) {
+      throw new Error(getSmtpConfigError());
+    }
+
+    if (smtpData) {
+      const { error } = await supabase.from("smtp_settings").update(payload).eq("user_id", user!.id);
+      if (error) throw error;
+    } else {
+      const { error } = await supabase.from("smtp_settings").insert(payload);
+      if (error) throw error;
+    }
+  };
+
   const saveSmtp = useMutation({
-    mutationFn: async () => {
-      const payload = { user_id: user!.id, host: smtp.host, port: parseInt(smtp.port), username: smtp.username, password: smtp.password, from_name: smtp.from_name, from_email: smtp.from_email, use_ssl: smtp.use_ssl };
-      if (smtpData) {
-        const { error } = await supabase.from("smtp_settings").update(payload).eq("user_id", user!.id);
-        if (error) throw error;
-      } else {
-        const { error } = await supabase.from("smtp_settings").insert(payload);
-        if (error) throw error;
-      }
-    },
+    mutationFn: upsertSmtpSettings,
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["smtp-settings"] }); toast.success("SMTP settings saved!"); },
     onError: (err: any) => toast.error(err.message),
+  });
+
+  const sendTestEmail = useMutation({
+    mutationFn: async () => {
+      if (!testEmail.trim()) throw new Error("Enter a test recipient email");
+
+      await upsertSmtpSettings();
+
+      const sendPromise = supabase.functions.invoke("send-email", {
+        body: {
+          to: testEmail.trim(),
+          subject: "Reachquix SMTP test",
+          body: "This is a test email sent from your Reachquix SMTP configuration.",
+        },
+      });
+
+      const result = await Promise.race([
+        sendPromise,
+        new Promise<never>((_, reject) => {
+          window.setTimeout(() => {
+            reject(new Error("SMTP test timed out. Check your SMTP host, port, SSL setting, username, and password."));
+          }, 15000);
+        }),
+      ]);
+
+      const { data, error } = result;
+
+      if (error) {
+        throw new Error(await getSupabaseFunctionErrorMessage(error, "Failed to send test email"));
+      }
+      if (data && typeof data === "object" && "success" in data && data.success === false) {
+        throw new Error(typeof data.error === "string" ? data.error : "SMTP test failed");
+      }
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["smtp-settings"] });
+      toast.success(`Test email sent to ${testEmail.trim()}`);
+    },
+    onError: (err: any) => toast.error(err.message || "Failed to send test email"),
   });
 
   const saveSheet = useMutation({
@@ -137,7 +201,28 @@ const SettingsPage = () => {
           <Switch checked={smtp.use_ssl} onCheckedChange={(v) => setSmtp({ ...smtp, use_ssl: v })} />
           <Label>Use SSL (port 465)</Label>
         </div>
-        <Button size="sm" onClick={() => saveSmtp.mutate()} disabled={saveSmtp.isPending}>{saveSmtp.isPending ? "Saving..." : "Save SMTP Settings"}</Button>
+        <div className="grid gap-4 md:grid-cols-[1fr_auto_auto] md:items-end">
+          <div className="space-y-2">
+            <Label>Test Recipient Email</Label>
+            <Input
+              value={testEmail}
+              onChange={(e) => setTestEmail(e.target.value)}
+              placeholder="you@example.com"
+              type="email"
+            />
+          </div>
+          <Button size="sm" onClick={() => saveSmtp.mutate()} disabled={saveSmtp.isPending || sendTestEmail.isPending}>
+            {saveSmtp.isPending ? "Saving..." : "Save SMTP Settings"}
+          </Button>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => sendTestEmail.mutate()}
+            disabled={saveSmtp.isPending || sendTestEmail.isPending}
+          >
+            {sendTestEmail.isPending ? "Sending Test..." : "Send Test Email"}
+          </Button>
+        </div>
       </motion.div>
 
       <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.05 }} className="stat-card !p-6 space-y-5">
