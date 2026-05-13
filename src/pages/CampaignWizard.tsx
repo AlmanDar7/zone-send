@@ -153,6 +153,10 @@ const CampaignWizard = () => {
       heading: cfg.headline || t.name,
       ctaText: cfg.ctaLabel,
       ctaHref: cfg.ctaUrl,
+      heroImageUrl: cfg.heroImageUrl,
+      eyebrow: cfg.eyebrow,
+      subheadline: cfg.subheadline,
+      footerNote: cfg.footerNote,
     });
   };
 
