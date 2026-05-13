@@ -405,13 +405,16 @@ export type Database = {
         Row: {
           blocks: Json | null
           body: string
+          category: string
           created_at: string
           design_config: Json | null
           html_body: string | null
           id: string
           name: string
           subject: string
+          tags: string[]
           template_format: string
+          thumbnail_url: string | null
           type: string
           updated_at: string
           user_id: string
@@ -419,13 +422,16 @@ export type Database = {
         Insert: {
           blocks?: Json | null
           body: string
+          category?: string
           created_at?: string
           design_config?: Json | null
           html_body?: string | null
           id?: string
           name: string
           subject: string
+          tags?: string[]
           template_format?: string
+          thumbnail_url?: string | null
           type?: string
           updated_at?: string
           user_id: string
@@ -433,13 +439,16 @@ export type Database = {
         Update: {
           blocks?: Json | null
           body?: string
+          category?: string
           created_at?: string
           design_config?: Json | null
           html_body?: string | null
           id?: string
           name?: string
           subject?: string
+          tags?: string[]
           template_format?: string
+          thumbnail_url?: string | null
           type?: string
           updated_at?: string
           user_id?: string
