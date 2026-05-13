@@ -317,16 +317,54 @@ export const wrapLegacyAsDocument = (body: string): TemplateDocument => {
  */
 export const buildDocumentFromLegacy = (
   body: string,
-  options?: { heading?: string; ctaText?: string; ctaHref?: string },
+  options?: {
+    heading?: string;
+    ctaText?: string;
+    ctaHref?: string;
+    heroImageUrl?: string;
+    eyebrow?: string;
+    subheadline?: string;
+    footerNote?: string;
+  },
 ): TemplateDocument => {
   const doc = createEmptyDocument();
   const blocks: Block[] = [];
+
+  if (options?.heroImageUrl) {
+    blocks.push({
+      ...(createBlock("image") as ImageBlock),
+      src: options.heroImageUrl,
+      alt: options.heading || "Hero image",
+      alignment: "center",
+      width: 100,
+    });
+  }
+
+  if (options?.eyebrow) {
+    blocks.push({
+      ...(createBlock("text") as TextBlock),
+      text: options.eyebrow.toUpperCase(),
+      alignment: "left",
+      fontSize: 12,
+      color: "#6b7280",
+    });
+  }
 
   if (options?.heading) {
     blocks.push({
       ...(createBlock("heading") as HeadingBlock),
       text: options.heading,
       alignment: "left",
+    });
+  }
+
+  if (options?.subheadline) {
+    blocks.push({
+      ...(createBlock("text") as TextBlock),
+      text: options.subheadline,
+      alignment: "left",
+      fontSize: 16,
+      color: "#4b5563",
     });
   }
 
@@ -353,6 +391,19 @@ export const buildDocumentFromLegacy = (
       text: options.ctaText,
       href: options.ctaHref || "#",
       alignment: "left",
+    });
+  }
+
+  if (options?.footerNote) {
+    blocks.push({
+      ...(createBlock("divider") as DividerBlock),
+    });
+    blocks.push({
+      ...(createBlock("text") as TextBlock),
+      text: options.footerNote,
+      alignment: "center",
+      fontSize: 12,
+      color: "#9ca3af",
     });
   }
 
