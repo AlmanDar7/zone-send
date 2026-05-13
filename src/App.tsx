@@ -20,6 +20,10 @@ import CampaignReport from "@/pages/CampaignReport";
 import ResetPassword from "@/pages/ResetPassword";
 import Profile from "@/pages/Profile";
 import NotFound from "@/pages/NotFound";
+import Emails from "@/pages/Emails";
+import Forms from "@/pages/Forms";
+import Workflows from "@/pages/Workflows";
+import Audience from "@/pages/Audience";
 
 const queryClient = new QueryClient();
 
@@ -38,7 +42,11 @@ const App = () => (
             <Route path="/" element={<Navigate to="/dashboard" replace />} />
             <Route element={<ProtectedRoute><AppLayout /></ProtectedRoute>}>
               <Route path="/dashboard" element={<Dashboard />} />
-              <Route path="/contacts" element={<Contacts />} />
+              <Route path="/contacts" element={<Navigate to="/audience" replace />} />
+              <Route path="/audience" element={<Audience />} />
+              <Route path="/emails" element={<Emails />} />
+              <Route path="/forms" element={<Forms />} />
+              <Route path="/workflows" element={<Workflows />} />
               <Route path="/campaigns" element={<Campaigns />} />
               <Route path="/campaigns/:id/report" element={<CampaignReport />} />
               <Route path="/templates" element={<Templates />} />
