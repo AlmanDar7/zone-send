@@ -1,9 +1,10 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   ArrowLeft, ArrowRight, Check, Search, Users, Calendar as CalendarIcon,
   Send, Clock, Sparkles, Monitor, Smartphone, Edit3, Eye, Folder,
+  Upload, FileSpreadsheet, X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -15,13 +16,16 @@ import { Card } from "@/components/ui/card";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Skeleton } from "@/components/ui/skeleton";
-import { useQuery, useMutation } from "@tanstack/react-query";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 import type { Database } from "@/integrations/supabase/types";
 import { toast } from "sonner";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
+import * as XLSX from "xlsx";
 
 import StepIndicator from "@/components/wizard/StepIndicator";
 import SuccessModal from "@/components/wizard/SuccessModal";
@@ -56,6 +60,18 @@ const CampaignWizard = () => {
   const [selectedContactIds, setSelectedContactIds] = useState<Set<string>>(new Set());
   const [contactSearch, setContactSearch] = useState("");
   const [audienceTab, setAudienceTab] = useState<"folders" | "contacts">("folders");
+
+  // CSV Import state
+  const [csvImportOpen, setCsvImportOpen] = useState(false);
+  const [csvFile, setCsvFile] = useState<File | null>(null);
+  const [csvPreview, setCsvPreview] = useState<any[]>([]);
+  const [csvHeaders, setCsvHeaders] = useState<string[]>([]);
+  const [nameColumn, setNameColumn] = useState("");
+  const [emailColumn, setEmailColumn] = useState("");
+  const [companyColumn, setCompanyColumn] = useState("");
+  const [isParsing, setIsParsing] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const queryClient = useQueryClient();
 
   // Step 3
   const [campaignName, setCampaignName] = useState("");
@@ -132,6 +148,148 @@ const CampaignWizard = () => {
       setSenderName(smtp.from_name || "");
     }
   }, [smtp]); // eslint-disable-line
+
+  /* ----------------- CSV Import helpers ----------------- */
+  const resetCsvImport = () => {
+    setCsvFile(null);
+    setCsvPreview([]);
+    setCsvHeaders([]);
+    setNameColumn("");
+    setEmailColumn("");
+    setCompanyColumn("");
+    setIsParsing(false);
+    if (fileInputRef.current) fileInputRef.current.value = "";
+  };
+
+  const detectColumns = (headers: string[]) => {
+    const lower = headers.map((h) => h.toLowerCase().trim());
+    const find = (keywords: string[]) => {
+      for (const kw of keywords) {
+        const idx = lower.findIndex((h) => h.includes(kw));
+        if (idx >= 0) return headers[idx];
+      }
+      return "";
+    };
+    setNameColumn(find(["name", "full name", "fullname", "first name", "last name"]));
+    setEmailColumn(find(["email", "e-mail", "email address", "mail"]));
+    setCompanyColumn(find(["company", "organization", "org", "business", "company_name", "company name"]));
+  };
+
+  const parseFile = async (file: File) => {
+    setIsParsing(true);
+    try {
+      const buffer = await file.arrayBuffer();
+      const isExcel = file.name.endsWith(".xlsx") || file.name.endsWith(".xls");
+      let rows: any[] = [];
+      let headers: string[] = [];
+
+      if (isExcel) {
+        const workbook = XLSX.read(buffer, { type: "array" });
+        const sheet = workbook.Sheets[workbook.SheetNames[0]];
+        rows = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: "" }) as any[];
+      } else {
+        const text = new TextDecoder().decode(buffer);
+        rows = text.split("\n").map((line) => {
+          const result: string[] = [];
+          let current = "";
+          let inQuotes = false;
+          for (const ch of line) {
+            if (ch === '"') { inQuotes = !inQuotes; continue; }
+            if (ch === ',' && !inQuotes) { result.push(current.trim()); current = ""; continue; }
+            current += ch;
+          }
+          result.push(current.trim());
+          return result;
+        }).filter((r) => r.length > 0);
+      }
+
+      if (rows.length === 0) { toast.error("No data found in file"); setIsParsing(false); return; }
+
+      headers = rows[0].map((h: any) => String(h).trim());
+      const previewRows = rows.slice(1, 6).map((r) => {
+        const obj: Record<string, string> = {};
+        headers.forEach((h, i) => { obj[h] = String(r[i] || "").trim(); });
+        return obj;
+      });
+
+      setCsvHeaders(headers);
+      setCsvPreview(previewRows);
+      detectColumns(headers);
+    } catch (e: any) {
+      toast.error(e.message || "Failed to parse file");
+    } finally {
+      setIsParsing(false);
+    }
+  };
+
+  const importCsvMutation = useMutation({
+    mutationFn: async () => {
+      if (!user) throw new Error("Not authenticated");
+      if (!emailColumn) throw new Error("Please map the Email column");
+
+      let rows: any[] = [];
+      const buffer = await csvFile!.arrayBuffer();
+      const isExcel = csvFile!.name.endsWith(".xlsx") || csvFile!.name.endsWith(".xls");
+
+      if (isExcel) {
+        const workbook = XLSX.read(buffer, { type: "array" });
+        const sheet = workbook.Sheets[workbook.SheetNames[0]];
+        rows = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: "" }) as any[];
+      } else {
+        const text = new TextDecoder().decode(buffer);
+        rows = text.split("\n").map((line) => {
+          const result: string[] = [];
+          let current = "";
+          let inQuotes = false;
+          for (const ch of line) {
+            if (ch === '"') { inQuotes = !inQuotes; continue; }
+            if (ch === ',' && !inQuotes) { result.push(current.trim()); current = ""; continue; }
+            current += ch;
+          }
+          result.push(current.trim());
+          return result;
+        }).filter((r) => r.length > 0);
+      }
+
+      const headerIdx: Record<string, number> = {};
+      rows[0].forEach((h: any, i: number) => { headerIdx[String(h).trim()] = i; });
+
+      const nameIdx = headerIdx[nameColumn];
+      const emailIdx = headerIdx[emailColumn];
+      const companyIdx = companyColumn ? headerIdx[companyColumn] : -1;
+
+      const importRows = rows
+        .slice(1)
+        .map((r) => {
+          const email = emailIdx >= 0 ? String(r[emailIdx] || "").trim() : "";
+          const name = nameIdx >= 0 ? String(r[nameIdx] || "").trim() : "";
+          const company = companyIdx >= 0 ? String(r[companyIdx] || "").trim() || null : null;
+          return { user_id: user.id, name, email, company_name: company, status: "Active" as const };
+        })
+        .filter((r) => r.email);
+
+      if (importRows.length === 0) throw new Error("No valid contacts found");
+
+      const { data: inserted, error } = await supabase.from("contacts").insert(importRows).select("id");
+      if (error) throw error;
+      return (inserted || []).map((c: any) => c.id as string);
+    },
+    onSuccess: (newIds: string[]) => {
+      queryClient.invalidateQueries({ queryKey: ["wizard-contacts"] });
+      queryClient.invalidateQueries({ queryKey: ["contacts"] });
+      // Auto-select newly imported contacts
+      setSelectedContactIds((prev) => {
+        const next = new Set(prev);
+        newIds.forEach((id) => next.add(id));
+        return next;
+      });
+      setCsvImportOpen(false);
+      resetCsvImport();
+      toast.success(`Imported ${newIds.length} contacts and added to selection!`);
+      setAudienceTab("contacts");
+    },
+    onError: (err: any) => toast.error(err.message || "Import failed"),
+  });
 
   // Recipient count derived from selections
   const recipientIds = useMemo(() => {
@@ -399,6 +557,7 @@ const CampaignWizard = () => {
                 tab={audienceTab}
                 onTabChange={setAudienceTab}
                 recipientCount={recipientIds.length}
+                onImportCsv={() => setCsvImportOpen(true)}
               />
             )}
 
@@ -493,6 +652,153 @@ const CampaignWizard = () => {
         onViewAnalytics={() => createdCampaignId && navigate(`/campaigns/${createdCampaignId}/report`)}
         onBackToDashboard={() => navigate("/dashboard")}
       />
+
+      {/* CSV Import Dialog */}
+      <Dialog open={csvImportOpen} onOpenChange={(open) => { setCsvImportOpen(open); if (!open) resetCsvImport(); }}>
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="font-display">Import Contacts</DialogTitle>
+            <DialogDescription>
+              Upload a CSV or Excel file with your contacts. We'll detect columns automatically.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-5">
+            {/* File upload */}
+            {!csvFile ? (
+              <div
+                onClick={() => fileInputRef.current?.click()}
+                onDragOver={(e) => e.preventDefault()}
+                onDrop={(e) => {
+                  e.preventDefault();
+                  const f = e.dataTransfer.files[0];
+                  if (f) { setCsvFile(f); parseFile(f); }
+                }}
+                className="cursor-pointer rounded-2xl border-2 border-dashed border-border bg-muted/30 p-10 text-center transition-colors hover:bg-muted/50"
+              >
+                <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-primary/10 text-primary">
+                  <Upload className="h-6 w-6" />
+                </div>
+                <p className="mt-4 text-sm font-medium text-foreground">Click or drag & drop a CSV / Excel file</p>
+                <p className="mt-1 text-xs text-muted-foreground">Supports .csv, .xlsx, .xls</p>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept=".csv,.xlsx,.xls"
+                  className="hidden"
+                  onChange={(e) => {
+                    const f = e.target.files?.[0];
+                    if (f) { setCsvFile(f); parseFile(f); }
+                  }}
+                />
+              </div>
+            ) : (
+              <div className="flex items-center justify-between rounded-xl border bg-muted/30 px-4 py-3">
+                <div className="flex items-center gap-3">
+                  <FileSpreadsheet className="h-5 w-5 text-primary" />
+                  <div>
+                    <p className="text-sm font-medium text-foreground">{csvFile.name}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {(csvFile.size / 1024).toFixed(1)} KB
+                    </p>
+                  </div>
+                </div>
+                <Button variant="ghost" size="sm" onClick={resetCsvImport}>
+                  <X className="h-4 w-4" />
+                </Button>
+              </div>
+            )}
+
+            {/* Column mapping */}
+            {csvHeaders.length > 0 && (
+              <motion.div
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="space-y-4"
+              >
+                <p className="text-sm font-medium text-foreground">Map columns</p>
+                <div className="grid gap-4 sm:grid-cols-3">
+                  <div className="space-y-2">
+                    <Label>Name column</Label>
+                    <Select value={nameColumn} onValueChange={setNameColumn}>
+                      <SelectTrigger><SelectValue placeholder="Select column" /></SelectTrigger>
+                      <SelectContent>
+                        {csvHeaders.map((h) => (
+                          <SelectItem key={h} value={h}>{h}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Email column <span className="text-destructive">*</span></Label>
+                    <Select value={emailColumn} onValueChange={setEmailColumn}>
+                      <SelectTrigger><SelectValue placeholder="Select column" /></SelectTrigger>
+                      <SelectContent>
+                        {csvHeaders.map((h) => (
+                          <SelectItem key={h} value={h}>{h}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Company column <span className="text-muted-foreground">(optional)</span></Label>
+                    <Select value={companyColumn} onValueChange={setCompanyColumn}>
+                      <SelectTrigger><SelectValue placeholder="Select column" /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="">None</SelectItem>
+                        {csvHeaders.map((h) => (
+                          <SelectItem key={h} value={h}>{h}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+
+                {/* Preview */}
+                {csvPreview.length > 0 && (
+                  <div className="space-y-2">
+                    <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">Preview (first 5 rows)</p>
+                    <div className="max-h-[200px] overflow-auto rounded-lg border">
+                      <table className="w-full text-sm">
+                        <thead className="bg-muted/50 sticky top-0">
+                          <tr>
+                            {nameColumn && <th className="px-3 py-2 text-left font-medium">Name</th>}
+                            {emailColumn && <th className="px-3 py-2 text-left font-medium">Email</th>}
+                            {companyColumn && <th className="px-3 py-2 text-left font-medium">Company</th>}
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-border">
+                          {csvPreview.map((row, i) => (
+                            <tr key={i}>
+                              {nameColumn && <td className="px-3 py-2">{row[nameColumn] || "—"}</td>}
+                              {emailColumn && <td className="px-3 py-2">{row[emailColumn] || "—"}</td>}
+                              {companyColumn && <td className="px-3 py-2">{row[companyColumn] || "—"}</td>}
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )}
+              </motion.div>
+            )}
+
+            {/* Actions */}
+            <div className="flex justify-end gap-3 pt-2">
+              <Button variant="outline" onClick={() => { setCsvImportOpen(false); resetCsvImport(); }}>
+                Cancel
+              </Button>
+              <Button
+                onClick={() => importCsvMutation.mutate()}
+                disabled={!emailColumn || !csvFile || importCsvMutation.isPending || isParsing}
+                className="rounded-full"
+              >
+                {importCsvMutation.isPending ? "Importing..." : "Import & Select"}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
@@ -580,6 +886,7 @@ const Step2Audience = ({
   selectedFolderIds, selectedContactIds,
   onToggleFolder, onToggleContact, onSelectAllVisible, onClearAll,
   search, onSearchChange, tab, onTabChange, recipientCount,
+  onImportCsv,
 }: {
   folders: FolderRow[]; folderMembers: any[]; contacts: ContactRow[];
   selectedFolderIds: Set<string>; selectedContactIds: Set<string>;
@@ -588,6 +895,7 @@ const Step2Audience = ({
   search: string; onSearchChange: (s: string) => void;
   tab: "folders" | "contacts"; onTabChange: (t: "folders" | "contacts") => void;
   recipientCount: number;
+  onImportCsv: () => void;
 }) => {
   const memberCountByFolder = useMemo(() => {
     const map: Record<string, number> = {};
@@ -640,6 +948,9 @@ const Step2Audience = ({
                 placeholder="Search..." className="rounded-full pl-9 sm:w-[260px]"
               />
             </div>
+            <Button variant="outline" size="sm" onClick={onImportCsv} className="rounded-full">
+              <Upload className="mr-1.5 h-3.5 w-3.5" /> Import CSV
+            </Button>
             <Button variant="ghost" size="sm" onClick={onClearAll}>Clear</Button>
           </div>
         </div>
