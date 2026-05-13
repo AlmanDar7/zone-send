@@ -652,6 +652,153 @@ const CampaignWizard = () => {
         onViewAnalytics={() => createdCampaignId && navigate(`/campaigns/${createdCampaignId}/report`)}
         onBackToDashboard={() => navigate("/dashboard")}
       />
+
+      {/* CSV Import Dialog */}
+      <Dialog open={csvImportOpen} onOpenChange={(open) => { setCsvImportOpen(open); if (!open) resetCsvImport(); }}>
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="font-display">Import Contacts</DialogTitle>
+            <DialogDescription>
+              Upload a CSV or Excel file with your contacts. We'll detect columns automatically.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-5">
+            {/* File upload */}
+            {!csvFile ? (
+              <div
+                onClick={() => fileInputRef.current?.click()}
+                onDragOver={(e) => e.preventDefault()}
+                onDrop={(e) => {
+                  e.preventDefault();
+                  const f = e.dataTransfer.files[0];
+                  if (f) { setCsvFile(f); parseFile(f); }
+                }}
+                className="cursor-pointer rounded-2xl border-2 border-dashed border-border bg-muted/30 p-10 text-center transition-colors hover:bg-muted/50"
+              >
+                <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-primary/10 text-primary">
+                  <Upload className="h-6 w-6" />
+                </div>
+                <p className="mt-4 text-sm font-medium text-foreground">Click or drag & drop a CSV / Excel file</p>
+                <p className="mt-1 text-xs text-muted-foreground">Supports .csv, .xlsx, .xls</p>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept=".csv,.xlsx,.xls"
+                  className="hidden"
+                  onChange={(e) => {
+                    const f = e.target.files?.[0];
+                    if (f) { setCsvFile(f); parseFile(f); }
+                  }}
+                />
+              </div>
+            ) : (
+              <div className="flex items-center justify-between rounded-xl border bg-muted/30 px-4 py-3">
+                <div className="flex items-center gap-3">
+                  <FileSpreadsheet className="h-5 w-5 text-primary" />
+                  <div>
+                    <p className="text-sm font-medium text-foreground">{csvFile.name}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {(csvFile.size / 1024).toFixed(1)} KB
+                    </p>
+                  </div>
+                </div>
+                <Button variant="ghost" size="sm" onClick={resetCsvImport}>
+                  <X className="h-4 w-4" />
+                </Button>
+              </div>
+            )}
+
+            {/* Column mapping */}
+            {csvHeaders.length > 0 && (
+              <motion.div
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="space-y-4"
+              >
+                <p className="text-sm font-medium text-foreground">Map columns</p>
+                <div className="grid gap-4 sm:grid-cols-3">
+                  <div className="space-y-2">
+                    <Label>Name column</Label>
+                    <Select value={nameColumn} onValueChange={setNameColumn}>
+                      <SelectTrigger><SelectValue placeholder="Select column" /></SelectTrigger>
+                      <SelectContent>
+                        {csvHeaders.map((h) => (
+                          <SelectItem key={h} value={h}>{h}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Email column <span className="text-destructive">*</span></Label>
+                    <Select value={emailColumn} onValueChange={setEmailColumn}>
+                      <SelectTrigger><SelectValue placeholder="Select column" /></SelectTrigger>
+                      <SelectContent>
+                        {csvHeaders.map((h) => (
+                          <SelectItem key={h} value={h}>{h}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Company column <span className="text-muted-foreground">(optional)</span></Label>
+                    <Select value={companyColumn} onValueChange={setCompanyColumn}>
+                      <SelectTrigger><SelectValue placeholder="Select column" /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="">None</SelectItem>
+                        {csvHeaders.map((h) => (
+                          <SelectItem key={h} value={h}>{h}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+
+                {/* Preview */}
+                {csvPreview.length > 0 && (
+                  <div className="space-y-2">
+                    <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">Preview (first 5 rows)</p>
+                    <div className="max-h-[200px] overflow-auto rounded-lg border">
+                      <table className="w-full text-sm">
+                        <thead className="bg-muted/50 sticky top-0">
+                          <tr>
+                            {nameColumn && <th className="px-3 py-2 text-left font-medium">Name</th>}
+                            {emailColumn && <th className="px-3 py-2 text-left font-medium">Email</th>}
+                            {companyColumn && <th className="px-3 py-2 text-left font-medium">Company</th>}
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-border">
+                          {csvPreview.map((row, i) => (
+                            <tr key={i}>
+                              {nameColumn && <td className="px-3 py-2">{row[nameColumn] || "—"}</td>}
+                              {emailColumn && <td className="px-3 py-2">{row[emailColumn] || "—"}</td>}
+                              {companyColumn && <td className="px-3 py-2">{row[companyColumn] || "—"}</td>}
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )}
+              </motion.div>
+            )}
+
+            {/* Actions */}
+            <div className="flex justify-end gap-3 pt-2">
+              <Button variant="outline" onClick={() => { setCsvImportOpen(false); resetCsvImport(); }}>
+                Cancel
+              </Button>
+              <Button
+                onClick={() => importCsvMutation.mutate()}
+                disabled={!emailColumn || !csvFile || importCsvMutation.isPending || isParsing}
+                className="rounded-full"
+              >
+                {importCsvMutation.isPending ? "Importing..." : "Import & Select"}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
