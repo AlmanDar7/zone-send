@@ -557,6 +557,7 @@ const CampaignWizard = () => {
                 tab={audienceTab}
                 onTabChange={setAudienceTab}
                 recipientCount={recipientIds.length}
+                onImportCsv={() => setCsvImportOpen(true)}
               />
             )}
 
