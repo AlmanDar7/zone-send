@@ -139,10 +139,25 @@ const Emails = () => {
             Design beautiful emails, manage templates, and track performance.
           </p>
         </div>
-        <Button onClick={() => navigate("/templates?new=1")} size="lg" className="rounded-full shadow-sm">
-          <Plus className="mr-2 h-4 w-4" />
-          New Email
-        </Button>
+        <div className="flex flex-wrap items-center gap-2">
+          <Button
+            onClick={() => navigate("/templates?new=1")}
+            size="lg"
+            variant="outline"
+            className="rounded-full"
+          >
+            <Plus className="mr-2 h-4 w-4" />
+            New Template
+          </Button>
+          <Button
+            onClick={() => navigate("/campaigns/new")}
+            size="lg"
+            className="rounded-full shadow-sm"
+          >
+            <Send className="mr-2 h-4 w-4" />
+            Send Email
+          </Button>
+        </div>
       </div>
 
       {/* Stat strip */}

@@ -205,9 +205,13 @@ const Campaigns = () => {
           <h1 className="text-2xl font-display font-bold text-foreground">Campaigns</h1>
           <p className="text-muted-foreground text-sm mt-1">Manage your email sequences</p>
         </div>
+        <div className="flex items-center gap-2">
+          <Button size="sm" onClick={() => navigate("/campaigns/new")} className="rounded-full">
+            <Plus className="w-4 h-4 mr-2" />New Campaign
+          </Button>
         <Dialog open={createOpen} onOpenChange={setCreateOpen}>
           <DialogTrigger asChild>
-            <Button size="sm"><Plus className="w-4 h-4 mr-2" />New Campaign</Button>
+            <Button size="sm" variant="outline">Sequence</Button>
           </DialogTrigger>
           <DialogContent>
             <DialogHeader><DialogTitle className="font-display">Create Campaign</DialogTitle></DialogHeader>
@@ -227,6 +231,7 @@ const Campaigns = () => {
             </div>
           </DialogContent>
         </Dialog>
+        </div>
       </div>
 
       {isLoading ? (
