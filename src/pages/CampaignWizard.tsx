@@ -801,6 +801,9 @@ const Step2Audience = ({
                 placeholder="Search..." className="rounded-full pl-9 sm:w-[260px]"
               />
             </div>
+            <Button variant="outline" size="sm" onClick={onImportCsv} className="rounded-full">
+              <Upload className="mr-1.5 h-3.5 w-3.5" /> Import CSV
+            </Button>
             <Button variant="ghost" size="sm" onClick={onClearAll}>Clear</Button>
           </div>
         </div>
