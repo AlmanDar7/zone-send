@@ -61,6 +61,18 @@ const CampaignWizard = () => {
   const [contactSearch, setContactSearch] = useState("");
   const [audienceTab, setAudienceTab] = useState<"folders" | "contacts">("folders");
 
+  // CSV Import state
+  const [csvImportOpen, setCsvImportOpen] = useState(false);
+  const [csvFile, setCsvFile] = useState<File | null>(null);
+  const [csvPreview, setCsvPreview] = useState<any[]>([]);
+  const [csvHeaders, setCsvHeaders] = useState<string[]>([]);
+  const [nameColumn, setNameColumn] = useState("");
+  const [emailColumn, setEmailColumn] = useState("");
+  const [companyColumn, setCompanyColumn] = useState("");
+  const [isParsing, setIsParsing] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const queryClient = useQueryClient();
+
   // Step 3
   const [campaignName, setCampaignName] = useState("");
   const [subject, setSubject] = useState("");
