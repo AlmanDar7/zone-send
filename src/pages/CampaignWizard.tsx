@@ -149,6 +149,148 @@ const CampaignWizard = () => {
     }
   }, [smtp]); // eslint-disable-line
 
+  /* ----------------- CSV Import helpers ----------------- */
+  const resetCsvImport = () => {
+    setCsvFile(null);
+    setCsvPreview([]);
+    setCsvHeaders([]);
+    setNameColumn("");
+    setEmailColumn("");
+    setCompanyColumn("");
+    setIsParsing(false);
+    if (fileInputRef.current) fileInputRef.current.value = "";
+  };
+
+  const detectColumns = (headers: string[]) => {
+    const lower = headers.map((h) => h.toLowerCase().trim());
+    const find = (keywords: string[]) => {
+      for (const kw of keywords) {
+        const idx = lower.findIndex((h) => h.includes(kw));
+        if (idx >= 0) return headers[idx];
+      }
+      return "";
+    };
+    setNameColumn(find(["name", "full name", "fullname", "first name", "last name"]));
+    setEmailColumn(find(["email", "e-mail", "email address", "mail"]));
+    setCompanyColumn(find(["company", "organization", "org", "business", "company_name", "company name"]));
+  };
+
+  const parseFile = async (file: File) => {
+    setIsParsing(true);
+    try {
+      const buffer = await file.arrayBuffer();
+      const isExcel = file.name.endsWith(".xlsx") || file.name.endsWith(".xls");
+      let rows: any[] = [];
+      let headers: string[] = [];
+
+      if (isExcel) {
+        const workbook = XLSX.read(buffer, { type: "array" });
+        const sheet = workbook.Sheets[workbook.SheetNames[0]];
+        rows = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: "" }) as any[];
+      } else {
+        const text = new TextDecoder().decode(buffer);
+        rows = text.split("\n").map((line) => {
+          const result: string[] = [];
+          let current = "";
+          let inQuotes = false;
+          for (const ch of line) {
+            if (ch === '"') { inQuotes = !inQuotes; continue; }
+            if (ch === ',' && !inQuotes) { result.push(current.trim()); current = ""; continue; }
+            current += ch;
+          }
+          result.push(current.trim());
+          return result;
+        }).filter((r) => r.length > 0);
+      }
+
+      if (rows.length === 0) { toast.error("No data found in file"); setIsParsing(false); return; }
+
+      headers = rows[0].map((h: any) => String(h).trim());
+      const previewRows = rows.slice(1, 6).map((r) => {
+        const obj: Record<string, string> = {};
+        headers.forEach((h, i) => { obj[h] = String(r[i] || "").trim(); });
+        return obj;
+      });
+
+      setCsvHeaders(headers);
+      setCsvPreview(previewRows);
+      detectColumns(headers);
+    } catch (e: any) {
+      toast.error(e.message || "Failed to parse file");
+    } finally {
+      setIsParsing(false);
+    }
+  };
+
+  const importCsvMutation = useMutation({
+    mutationFn: async () => {
+      if (!user) throw new Error("Not authenticated");
+      if (!emailColumn) throw new Error("Please map the Email column");
+
+      let rows: any[] = [];
+      const buffer = await csvFile!.arrayBuffer();
+      const isExcel = csvFile!.name.endsWith(".xlsx") || csvFile!.name.endsWith(".xls");
+
+      if (isExcel) {
+        const workbook = XLSX.read(buffer, { type: "array" });
+        const sheet = workbook.Sheets[workbook.SheetNames[0]];
+        rows = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: "" }) as any[];
+      } else {
+        const text = new TextDecoder().decode(buffer);
+        rows = text.split("\n").map((line) => {
+          const result: string[] = [];
+          let current = "";
+          let inQuotes = false;
+          for (const ch of line) {
+            if (ch === '"') { inQuotes = !inQuotes; continue; }
+            if (ch === ',' && !inQuotes) { result.push(current.trim()); current = ""; continue; }
+            current += ch;
+          }
+          result.push(current.trim());
+          return result;
+        }).filter((r) => r.length > 0);
+      }
+
+      const headerIdx: Record<string, number> = {};
+      rows[0].forEach((h: any, i: number) => { headerIdx[String(h).trim()] = i; });
+
+      const nameIdx = headerIdx[nameColumn];
+      const emailIdx = headerIdx[emailColumn];
+      const companyIdx = companyColumn ? headerIdx[companyColumn] : -1;
+
+      const importRows = rows
+        .slice(1)
+        .map((r) => {
+          const email = emailIdx >= 0 ? String(r[emailIdx] || "").trim() : "";
+          const name = nameIdx >= 0 ? String(r[nameIdx] || "").trim() : "";
+          const company = companyIdx >= 0 ? String(r[companyIdx] || "").trim() || null : null;
+          return { user_id: user.id, name, email, company_name: company, status: "Active" as const };
+        })
+        .filter((r) => r.email);
+
+      if (importRows.length === 0) throw new Error("No valid contacts found");
+
+      const { data: inserted, error } = await supabase.from("contacts").insert(importRows).select("id");
+      if (error) throw error;
+      return (inserted || []).map((c: any) => c.id as string);
+    },
+    onSuccess: (newIds: string[]) => {
+      queryClient.invalidateQueries({ queryKey: ["wizard-contacts"] });
+      queryClient.invalidateQueries({ queryKey: ["contacts"] });
+      // Auto-select newly imported contacts
+      setSelectedContactIds((prev) => {
+        const next = new Set(prev);
+        newIds.forEach((id) => next.add(id));
+        return next;
+      });
+      setCsvImportOpen(false);
+      resetCsvImport();
+      toast.success(`Imported ${newIds.length} contacts and added to selection!`);
+      setAudienceTab("contacts");
+    },
+    onError: (err: any) => toast.error(err.message || "Import failed"),
+  });
+
   // Recipient count derived from selections
   const recipientIds = useMemo(() => {
     const ids = new Set<string>();
