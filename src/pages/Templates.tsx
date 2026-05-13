@@ -1,4 +1,5 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { Plus, Copy, Trash2, Eye, Edit3, Sparkles, LayoutTemplate } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -106,6 +107,7 @@ const toFormState = (template: EmailTemplateRow): TemplateFormState => {
 const Templates = () => {
   const { user } = useAuth();
   const queryClient = useQueryClient();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [createOpen, setCreateOpen] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
   const [selectedTemplate, setSelectedTemplate] = useState<EmailTemplateRow | null>(null);
@@ -122,6 +124,31 @@ const Templates = () => {
     },
     enabled: !!user,
   });
+
+  // Deep-link support from /emails: ?edit=<id> opens edit dialog, ?new=1 opens create dialog
+  useEffect(() => {
+    const editId = searchParams.get("edit");
+    const isNew = searchParams.get("new");
+    if (isNew) {
+      setForm(createEmptyForm());
+      setCreateOpen(true);
+      const next = new URLSearchParams(searchParams);
+      next.delete("new");
+      setSearchParams(next, { replace: true });
+      return;
+    }
+    if (editId && templates.length > 0) {
+      const found = templates.find((t) => t.id === editId);
+      if (found) {
+        setSelectedTemplate(found);
+        setForm(toFormState(found));
+        setEditOpen(true);
+        const next = new URLSearchParams(searchParams);
+        next.delete("edit");
+        setSearchParams(next, { replace: true });
+      }
+    }
+  }, [searchParams, templates, setSearchParams]);
 
   const starterTemplates = useMemo(
     () => visualTemplatePresets.map((preset) => ({ preset, starter: getStarterTemplate(preset.id) })),
