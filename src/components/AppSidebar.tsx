@@ -1,148 +1,128 @@
+import { useState } from "react";
 import { NavLink, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import {
-  LayoutDashboard,
-  Users,
-  Send,
-  FileText,
-  BarChart3,
-  Settings,
-  Mail,
-  LogOut,
-  Inbox,
-  UserCircle2,
-  ChevronDown,
+  LayoutDashboard, Mail, FileText, GitBranch, Users, BarChart3,
+  Settings, LogOut, UserCircle2, Menu, X, Sparkles,
 } from "lucide-react";
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { cn } from "@/lib/utils";
 
-const primaryNavItems = [
+const mainItems = [
   { to: "/dashboard", icon: LayoutDashboard, label: "Dashboard" },
-  { to: "/contacts", icon: Users, label: "Contacts" },
-  { to: "/profile", icon: UserCircle2, label: "Profile" },
-  { to: "/settings", icon: Settings, label: "Settings" },
+  { to: "/emails", icon: Mail, label: "Emails" },
+  { to: "/forms", icon: FileText, label: "Forms" },
+  { to: "/workflows", icon: GitBranch, label: "Workflows" },
+  { to: "/audience", icon: Users, label: "Audience" },
+  { to: "/analytics", icon: BarChart3, label: "Analytics" },
 ];
 
-const emailNavItems = [
-  { to: "/campaigns", icon: Send, label: "Campaigns" },
-  { to: "/templates", icon: FileText, label: "Templates" },
-  { to: "/email-queue", icon: Inbox, label: "Email Queue" },
-  { to: "/analytics", icon: BarChart3, label: "Analytics" },
+const bottomItems = [
+  { to: "/profile", icon: UserCircle2, label: "Profile" },
+  { to: "/settings", icon: Settings, label: "Settings" },
 ];
 
 const AppSidebar = () => {
   const location = useLocation();
   const navigate = useNavigate();
   const { signOut } = useAuth();
-  const isEmailSectionActive = emailNavItems.some((item) => location.pathname === item.to);
+  const [mobileOpen, setMobileOpen] = useState(false);
 
   const handleSignOut = async () => {
     await signOut();
     navigate("/login");
   };
 
-  return (
-    <aside className="fixed left-0 top-0 bottom-0 w-64 bg-sidebar flex flex-col z-50">
-      <div className="p-6 border-b border-sidebar-border">
-        <div className="flex items-center gap-3">
-          <div className="w-9 h-9 rounded-lg bg-primary flex items-center justify-center">
-            <Mail className="w-5 h-5 text-primary-foreground" />
-          </div>
-          <div>
-            <h1 className="text-sidebar-primary-foreground font-display font-bold text-lg leading-tight">Reachquix</h1>
-            <p className="text-sidebar-foreground text-xs">Email Automation</p>
-          </div>
+  const renderItem = (item: typeof mainItems[number]) => {
+    const isActive =
+      location.pathname === item.to ||
+      (item.to === "/emails" && location.pathname.startsWith("/templates")) ||
+      (item.to === "/audience" && location.pathname.startsWith("/contacts"));
+    return (
+      <NavLink
+        key={item.to}
+        to={item.to}
+        onClick={() => setMobileOpen(false)}
+        className={cn(
+          "group relative flex items-center gap-3 rounded-xl px-3.5 py-2.5 text-sm font-medium transition-all",
+          isActive
+            ? "bg-sidebar-accent text-sidebar-accent-foreground shadow-sm"
+            : "text-sidebar-foreground hover:bg-sidebar-accent/40 hover:text-sidebar-accent-foreground",
+        )}
+      >
+        <item.icon className={cn("h-[18px] w-[18px] transition-transform", isActive && "scale-110")} />
+        <span className="flex-1">{item.label}</span>
+        {isActive && <div className="h-1.5 w-1.5 rounded-full bg-primary" />}
+      </NavLink>
+    );
+  };
+
+  const sidebarContent = (
+    <>
+      <div className="flex items-center gap-3 px-6 py-6">
+        <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-primary to-primary/70 shadow-md">
+          <Sparkles className="h-5 w-5 text-primary-foreground" />
+        </div>
+        <div>
+          <h1 className="font-display text-lg font-bold leading-tight text-sidebar-primary-foreground">
+            Reachquix
+          </h1>
+          <p className="text-[11px] tracking-wide text-sidebar-foreground/70">EMAIL AUTOMATION</p>
         </div>
       </div>
-      <nav className="flex-1 p-4 space-y-1">
-        {primaryNavItems.slice(0, 2).map((item) => {
-          const isActive = location.pathname === item.to;
-          return (
-            <NavLink
-              key={item.to}
-              to={item.to}
-              className={`flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm font-medium transition-colors ${
-                isActive
-                  ? "bg-sidebar-accent text-sidebar-accent-foreground"
-                  : "text-sidebar-foreground hover:text-sidebar-accent-foreground hover:bg-sidebar-accent/50"
-              }`}
-            >
-              <item.icon className="w-4 h-4" />
-              {item.label}
-              {isActive && <div className="ml-auto w-1.5 h-1.5 rounded-full bg-primary" />}
-            </NavLink>
-          );
-        })}
 
-        <Collapsible defaultOpen={isEmailSectionActive} className="space-y-1">
-          <CollapsibleTrigger
-            className={cn(
-              "group flex w-full items-center gap-3 rounded-lg px-4 py-2.5 text-sm font-medium transition-colors",
-              isEmailSectionActive
-                ? "bg-sidebar-accent text-sidebar-accent-foreground"
-                : "text-sidebar-foreground hover:bg-sidebar-accent/50 hover:text-sidebar-accent-foreground",
-            )}
-          >
-            <Mail className="w-4 h-4" />
-            Email
-            <div className="ml-auto flex items-center gap-2">
-              {isEmailSectionActive && <div className="h-1.5 w-1.5 rounded-full bg-primary" />}
-              <ChevronDown className="w-4 h-4 transition-transform group-data-[state=open]:rotate-180" />
-            </div>
-          </CollapsibleTrigger>
-          <CollapsibleContent className="space-y-1">
-            <div className="ml-4 space-y-1 border-l border-sidebar-border pl-3">
-              {emailNavItems.map((item) => {
-                const isActive = location.pathname === item.to;
-                return (
-                  <NavLink
-                    key={item.to}
-                    to={item.to}
-                    className={`flex items-center gap-3 rounded-lg px-4 py-2.5 text-sm font-medium transition-colors ${
-                      isActive
-                        ? "bg-sidebar-accent text-sidebar-accent-foreground"
-                        : "text-sidebar-foreground hover:text-sidebar-accent-foreground hover:bg-sidebar-accent/50"
-                    }`}
-                  >
-                    <item.icon className="w-4 h-4" />
-                    {item.label}
-                    {isActive && <div className="ml-auto w-1.5 h-1.5 rounded-full bg-primary" />}
-                  </NavLink>
-                );
-              })}
-            </div>
-          </CollapsibleContent>
-        </Collapsible>
-
-        {primaryNavItems.slice(2).map((item) => {
-          const isActive = location.pathname === item.to;
-          return (
-            <NavLink
-              key={item.to}
-              to={item.to}
-              className={`flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm font-medium transition-colors ${
-                isActive
-                  ? "bg-sidebar-accent text-sidebar-accent-foreground"
-                  : "text-sidebar-foreground hover:text-sidebar-accent-foreground hover:bg-sidebar-accent/50"
-              }`}
-            >
-              <item.icon className="w-4 h-4" />
-              {item.label}
-              {isActive && <div className="ml-auto w-1.5 h-1.5 rounded-full bg-primary" />}
-            </NavLink>
-          );
-        })}
+      <nav className="flex-1 space-y-1 px-3">
+        {mainItems.map(renderItem)}
       </nav>
-      <div className="p-4 border-t border-sidebar-border">
+
+      <div className="space-y-1 border-t border-sidebar-border/60 p-3">
+        {bottomItems.map(renderItem)}
         <button
           onClick={handleSignOut}
-          className="flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm text-sidebar-foreground hover:text-sidebar-accent-foreground hover:bg-sidebar-accent/50 transition-colors w-full"
+          className="mt-1 flex w-full items-center gap-3 rounded-xl px-3.5 py-2.5 text-sm font-medium text-sidebar-foreground transition-colors hover:bg-sidebar-accent/40 hover:text-sidebar-accent-foreground"
         >
-          <LogOut className="w-4 h-4" />
+          <LogOut className="h-[18px] w-[18px]" />
           Sign Out
         </button>
       </div>
-    </aside>
+    </>
+  );
+
+  return (
+    <>
+      {/* Mobile toggle */}
+      <button
+        onClick={() => setMobileOpen(true)}
+        className="fixed left-4 top-4 z-40 flex h-10 w-10 items-center justify-center rounded-xl border border-border bg-card shadow-sm lg:hidden"
+        aria-label="Open menu"
+      >
+        <Menu className="h-5 w-5" />
+      </button>
+
+      {/* Mobile overlay */}
+      {mobileOpen && (
+        <div
+          className="fixed inset-0 z-40 bg-black/40 lg:hidden"
+          onClick={() => setMobileOpen(false)}
+        />
+      )}
+
+      <aside
+        className={cn(
+          "fixed bottom-0 left-0 top-0 z-50 flex w-64 flex-col bg-sidebar transition-transform duration-300",
+          "lg:translate-x-0",
+          mobileOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0",
+        )}
+      >
+        <button
+          onClick={() => setMobileOpen(false)}
+          className="absolute right-3 top-3 rounded-lg p-1.5 text-sidebar-foreground hover:bg-sidebar-accent/40 lg:hidden"
+          aria-label="Close menu"
+        >
+          <X className="h-4 w-4" />
+        </button>
+        {sidebarContent}
+      </aside>
+    </>
   );
 };
 
