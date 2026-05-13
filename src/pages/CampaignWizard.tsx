@@ -151,7 +151,7 @@ const CampaignWizard = () => {
     const cfg = (t.design_config as any) || {};
     return buildDocumentFromLegacy(t.body || "", {
       heading: cfg.headline || t.name,
-      ctaText: cfg.ctaLabel,
+      ctaText: cfg.ctaText || cfg.ctaLabel,
       ctaHref: cfg.ctaUrl,
       heroImageUrl: cfg.heroImageUrl,
       eyebrow: cfg.eyebrow,
