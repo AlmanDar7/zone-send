@@ -739,6 +739,7 @@ const Step2Audience = ({
   selectedFolderIds, selectedContactIds,
   onToggleFolder, onToggleContact, onSelectAllVisible, onClearAll,
   search, onSearchChange, tab, onTabChange, recipientCount,
+  onImportCsv,
 }: {
   folders: FolderRow[]; folderMembers: any[]; contacts: ContactRow[];
   selectedFolderIds: Set<string>; selectedContactIds: Set<string>;
@@ -747,6 +748,7 @@ const Step2Audience = ({
   search: string; onSearchChange: (s: string) => void;
   tab: "folders" | "contacts"; onTabChange: (t: "folders" | "contacts") => void;
   recipientCount: number;
+  onImportCsv: () => void;
 }) => {
   const memberCountByFolder = useMemo(() => {
     const map: Record<string, number> = {};
