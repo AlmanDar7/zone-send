@@ -1,75 +1,55 @@
-## Overview
+## Goal
+Replace the current single-page campaign creation with a guided 6-step wizard (Template → Audience → Details → Schedule → Success → Analytics) styled like Flodesk.
 
-This is a major platform overhaul inspired by Flodesk. I'll restructure the sidebar around five core sections — Emails, Forms, Workflows, Audience, Analytics — and rebuild each with a premium, minimal, card-driven UI. Given the scope, I'll do this in phases so you can review progress and steer.
+## New Route
+`/campaigns/new` — wizard shell with step indicator, animated transitions (framer-motion), Back/Continue, draft auto-save to `campaigns` (status=Draft) + `campaign_steps`.
 
-## Proposed Sidebar Structure
+Existing `/campaigns` list gets a prominent "New Campaign" CTA pointing here. Old inline editor stays available for edits but the primary creation flow is the wizard.
 
-```text
-Dashboard
-Emails        (replaces Templates + Campaigns + Email Queue views)
-Forms         (new)
-Workflows     (new — replaces today's Campaigns automation flow)
-Audience      (replaces Contacts)
-Analytics
-─────────────
-Profile
-Settings
-```
+## Steps
 
-Old routes will redirect so nothing breaks.
+**Step 1 — Template**
+- Card grid of `email_templates` with thumbnail preview (reuse `TemplatePreview`).
+- "Edit" opens the existing `BlockEditor` inline in a full-bleed panel with desktop/mobile toggle.
+- Selection stored in wizard state (`templateId`, edited `blocks`/`html_body`).
 
-## Phase 1 — Foundation & Emails (this round)
+**Step 2 — Audience**
+- Tabs: Folders (from `contact_folders`) and Individual contacts.
+- Search + status filter, multi-select with checkboxes.
+- Live count badge "X recipients selected".
 
-1. **Design system polish**: refined typography scale, softer shadows, smoother transitions, skeleton loaders, empty-state component, dark mode pass.
-2. **New sidebar** with the 5 sections + collapsible behavior, mobile drawer.
-3. **Emails section** (`/emails`):
-   - Visual card grid of all `email_templates` with thumbnail rendered from `blocks`
-   - Card shows: preview, name, subject, status (Draft/Scheduled/Sent), open rate, click rate, date
-   - Actions menu: Edit, Duplicate, Delete, Preview, Schedule, Send
-   - Search bar + status/tag filters + category tabs
-   - Add `tags TEXT[]` and `category TEXT` columns to `email_templates`
-   - Open/click rates pulled from existing `email_events` joined via campaign
+**Step 3 — Details**
+- Subject, preview text, sender name, sender email (defaults from `smtp_settings`).
+- Right panel: live email preview (subject + first lines + rendered body).
+- "AI suggest" button → existing `ai-email-writer` function for subject ideas.
 
-## Phase 2 — Forms
+**Step 4 — Schedule**
+- Two big cards: "Send Now" / "Schedule for Later".
+- If scheduled: shadcn Calendar + time input + timezone select (reuse `TimezoneSelector`).
+- Bottom: confirmation summary card (template name, recipients, subject, schedule).
 
-- New `forms` and `form_submissions` tables (RLS per user)
-- `/forms` list with visual cards (preview, name, submissions, list, status)
-- Drag-and-drop form builder (reuse @dnd-kit) with field types: name, email, phone, custom text/textarea/select/checkbox
-- Form types: popup, embedded, landing page
-- Embed code + public submit edge function
-- Connect form → audience tag/list
+**Step 5 — Success Modal**
+- Animated check icon, campaign name, recipient count, send/schedule time.
+- Buttons: "View Analytics" → `/campaigns/:id/report`, "Back to Dashboard".
 
-## Phase 3 — Workflows
+**Step 6 — Analytics**
+- Use existing `CampaignReport` page; ensure cards for open/click/bounce/unsubscribe/delivered + 7-day chart + top links list. Add device breakdown if `user_agent` data available (parse mobile/desktop from `email_events.user_agent`).
 
-- New `workflows`, `workflow_nodes`, `workflow_edges` tables
-- Visual node-based builder (React Flow) with triggers (form submit, tag added, signup), actions (send email, wait/delay, condition)
-- Workflow cards: name, trigger, email count, active toggle
-- Hook into existing `email_queue` for execution
+## Technical
+- New files:
+  - `src/pages/CampaignWizard.tsx` (shell + state)
+  - `src/components/wizard/StepIndicator.tsx`
+  - `src/components/wizard/Step1Template.tsx`
+  - `src/components/wizard/Step2Audience.tsx`
+  - `src/components/wizard/Step3Details.tsx`
+  - `src/components/wizard/Step4Schedule.tsx`
+  - `src/components/wizard/SuccessModal.tsx`
+- Wizard state via `useState`/context inside the page; persist to `campaigns` + `campaign_steps` on Continue.
+- Reuse: `BlockEditor`, `TemplatePreview`, `TimezoneSelector`, `Calendar`, queue insertion logic from existing campaign creation.
+- Animations: framer-motion `AnimatePresence` for step transitions.
+- Add route in `src/App.tsx`. Update `Campaigns.tsx` "New Campaign" button to navigate to `/campaigns/new`.
+- No DB migration required — uses existing tables. Optional: add `preview_text` column to `campaigns` if needed (will add migration if user approves).
 
-## Phase 4 — Audience
-
-- Rebrand Contacts as Audience at `/audience`
-- Card + table dual view, segmentation, tag system (new `contact_tags` + `contact_tag_members`)
-- CSV import/export, growth chart, subscriber sources
-- Lists/groups (extend existing `contact_folders`)
-
-## Phase 5 — Analytics & Final Polish
-
-- Rich `/analytics` dashboard: open/click/bounce/spam/unsub rates, totals, best campaigns, comparison, date-range filter, animated charts (recharts)
-- Final responsive + a11y pass, loading skeletons everywhere, empty states
-
-## Technical Notes
-
-- Stack stays React + Vite + Tailwind + shadcn + Supabase (Lovable Cloud)
-- New libs: `reactflow` (workflows), `react-hook-form` (already present), reuse `@dnd-kit`
-- All new tables get RLS scoped to `auth.uid()`
-- Old routes (`/campaigns`, `/templates`, `/contacts`, `/email-queue`) redirect to new equivalents; underlying data preserved
-- Migrations created per phase; types regenerate automatically
-
-## What I need from you
-
-1. **Approve the phased approach** (5 phases, starting with Foundation + Emails now).
-2. **Workflow builder library**: OK to use `reactflow` for the node canvas? (it's the standard)
-3. **Old routes**: redirect silently, or keep them accessible too?
-
-Once you confirm, I'll start Phase 1.
+## Out of scope
+- Rewriting the BlockEditor itself (already exists).
+- Building a new analytics page (extend existing `CampaignReport`).

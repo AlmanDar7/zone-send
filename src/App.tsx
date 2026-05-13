@@ -24,6 +24,7 @@ import Emails from "@/pages/Emails";
 import Forms from "@/pages/Forms";
 import Workflows from "@/pages/Workflows";
 import Audience from "@/pages/Audience";
+import CampaignWizard from "@/pages/CampaignWizard";
 
 const queryClient = new QueryClient();
 
@@ -48,6 +49,7 @@ const App = () => (
               <Route path="/forms" element={<Forms />} />
               <Route path="/workflows" element={<Workflows />} />
               <Route path="/campaigns" element={<Campaigns />} />
+              <Route path="/campaigns/new" element={<CampaignWizard />} />
               <Route path="/campaigns/:id/report" element={<CampaignReport />} />
               <Route path="/templates" element={<Templates />} />
               <Route path="/analytics" element={<Analytics />} />
