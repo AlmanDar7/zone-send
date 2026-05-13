@@ -311,6 +311,55 @@ export const wrapLegacyAsDocument = (body: string): TemplateDocument => {
   return doc;
 };
 
+/**
+ * Build a richer block document from legacy visual / plain templates by splitting
+ * the body into a heading + paragraph blocks so users can visually edit each piece.
+ */
+export const buildDocumentFromLegacy = (
+  body: string,
+  options?: { heading?: string; ctaText?: string; ctaHref?: string },
+): TemplateDocument => {
+  const doc = createEmptyDocument();
+  const blocks: Block[] = [];
+
+  if (options?.heading) {
+    blocks.push({
+      ...(createBlock("heading") as HeadingBlock),
+      text: options.heading,
+      alignment: "left",
+    });
+  }
+
+  const paragraphs = (body || "")
+    .split(/\n\s*\n/)
+    .map((p) => p.trim())
+    .filter(Boolean);
+
+  if (paragraphs.length === 0) {
+    blocks.push(createBlock("text") as TextBlock);
+  } else {
+    paragraphs.forEach((p) => {
+      blocks.push({
+        ...(createBlock("text") as TextBlock),
+        text: p,
+        alignment: "left",
+      });
+    });
+  }
+
+  if (options?.ctaText) {
+    blocks.push({
+      ...(createBlock("button") as ButtonBlock),
+      text: options.ctaText,
+      href: options.ctaHref || "#",
+      alignment: "left",
+    });
+  }
+
+  doc.blocks = blocks;
+  return doc;
+};
+
 /* Brand themes */
 
 export type BrandTheme = {

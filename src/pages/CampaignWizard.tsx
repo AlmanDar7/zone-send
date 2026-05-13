@@ -30,7 +30,7 @@ import BlockEditor from "@/components/BlockEditor";
 import TimezoneSelector from "@/components/TimezoneSelector";
 import {
   createEmptyDocument, isTemplateDocument, renderDocumentHtml, renderDocumentPlain,
-  wrapLegacyAsDocument, type TemplateDocument,
+  buildDocumentFromLegacy, type TemplateDocument,
 } from "@/lib/template-blocks";
 import { replaceTemplateVariables } from "@/lib/template-presets";
 
@@ -146,27 +146,27 @@ const CampaignWizard = () => {
   }, [selectedFolderIds, selectedContactIds, folderMembers, contacts]);
 
   /* ----------------- Step 1 helpers ----------------- */
+  const toDoc = (t: EmailRow): TemplateDocument => {
+    if (isTemplateDocument(t.blocks)) return t.blocks as TemplateDocument;
+    const cfg = (t.design_config as any) || {};
+    return buildDocumentFromLegacy(t.body || "", {
+      heading: cfg.headline || t.name,
+      ctaText: cfg.ctaLabel,
+      ctaHref: cfg.ctaUrl,
+    });
+  };
+
   const startEditing = (t: EmailRow) => {
     setSelectedTemplate(t);
-    const doc = isTemplateDocument(t.blocks)
-      ? (t.blocks as TemplateDocument)
-      : t.body
-        ? wrapLegacyAsDocument(t.body)
-        : createEmptyDocument();
-    setEditorDoc(doc);
+    setEditorDoc(toDoc(t));
     if (!subject) setSubject(t.subject);
     if (!campaignName) setCampaignName(t.name);
     setEditing(true);
   };
 
   const pickAndContinue = (t: EmailRow) => {
-    const doc = isTemplateDocument(t.blocks)
-      ? (t.blocks as TemplateDocument)
-      : t.body
-        ? wrapLegacyAsDocument(t.body)
-        : createEmptyDocument();
     setSelectedTemplate(t);
-    setEditorDoc(doc);
+    setEditorDoc(toDoc(t));
     if (!subject) setSubject(t.subject);
     if (!campaignName) setCampaignName(t.name);
     setStep(2);
