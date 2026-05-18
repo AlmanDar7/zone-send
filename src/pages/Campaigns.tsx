@@ -1,6 +1,10 @@
-import { useState } from "react";
-import { useNavigate } from "react-router-dom";
-import { Plus, Play, Pause, Square, MoreHorizontal, Trash2, ChevronDown, ChevronUp, Mail, BarChart3 } from "lucide-react";
+import { useMemo, useState } from "react";
+import { useLocation, useNavigate } from "react-router-dom";
+import { formatDistanceToNow } from "date-fns";
+import { Play, Pause, Square, MoreHorizontal, Trash2, ChevronDown, ChevronUp, BarChart3 } from "lucide-react";
+import PageToolbar from "@/components/PageToolbar";
+import ContentCard from "@/components/ContentCard";
+import CampaignStepsPanel from "@/components/CampaignStepsPanel";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -15,20 +19,19 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { startQueueProcessor } from "@/lib/queueProcessor";
 import { getSmtpConfigError, hasUsableSmtpConfig } from "@/lib/smtpValidation";
+import {
+  campaignNameDuplicateMessage,
+  isCampaignNameTaken,
+  parseCampaignNameConflict,
+  partitionDuplicateCampaigns,
+} from "@/lib/campaign-names";
+import WorkflowDetailSheet from "@/components/WorkflowDetailSheet";
 
 const statusColors: Record<string, string> = {
   Running: "bg-success/10 text-success",
   Paused: "bg-warning/10 text-warning",
   Draft: "bg-muted text-muted-foreground",
   Completed: "bg-info/10 text-info",
-};
-
-const stepLabels: Record<number, string> = {
-  1: "Initial Email",
-  2: "Follow-Up 1",
-  3: "Follow-Up 2",
-  4: "Follow-Up 3",
-  5: "Final Follow-Up",
 };
 
 type CampaignStep = Database["public"]["Tables"]["campaign_steps"]["Row"];
@@ -53,20 +56,35 @@ const formatStepDelay = (step: CampaignStep) => {
   return `Send after ${timing.value} ${suffix}`;
 };
 
-const Campaigns = () => {
+interface CampaignsProps {
+  variant?: "campaigns" | "workflows";
+}
+
+const Campaigns = ({ variant = "campaigns" }: CampaignsProps) => {
   const { user } = useAuth();
   const queryClient = useQueryClient();
   const navigate = useNavigate();
+  const location = useLocation();
+  const isWorkflowsPage =
+    variant === "workflows" || location.pathname.startsWith("/workflows");
   const [createOpen, setCreateOpen] = useState(false);
   const [newName, setNewName] = useState("");
   const [dailyLimit, setDailyLimit] = useState("500");
   const [expandedCampaign, setExpandedCampaign] = useState<string | null>(null);
   const [timingDrafts, setTimingDrafts] = useState<Record<string, TimingDraft>>({});
+  const [search, setSearch] = useState("");
+  const [sortBy, setSortBy] = useState("newest");
+  const [statusFilter, setStatusFilter] = useState("all");
+  const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
 
   const { data: campaigns = [], isLoading } = useQuery({
     queryKey: ["campaigns", user?.id],
     queryFn: async () => {
-      const { data, error } = await supabase.from("campaigns").select("*").order("created_at", { ascending: false });
+      const { data, error } = await supabase
+        .from("campaigns")
+        .select("*")
+        .eq("user_id", user!.id)
+        .order("created_at", { ascending: false });
       if (error) throw error;
       return data;
     },
@@ -76,7 +94,10 @@ const Campaigns = () => {
   const { data: templates = [] } = useQuery({
     queryKey: ["templates-list", user?.id],
     queryFn: async () => {
-      const { data, error } = await supabase.from("email_templates").select("id, name, type");
+      const { data, error } = await supabase
+        .from("email_templates")
+        .select("id, name, type, category")
+        .eq("user_id", user!.id);
       if (error) throw error;
       return data;
     },
@@ -106,14 +127,30 @@ const Campaigns = () => {
     enabled: !!user,
   });
 
+  const trimmedNewName = newName.trim();
+  const isNewNameTaken = useMemo(
+    () => isCampaignNameTaken(trimmedNewName, campaigns),
+    [trimmedNewName, campaigns],
+  );
+
   const createCampaign = useMutation({
     mutationFn: async () => {
+      const name = newName.trim();
+      if (!name) throw new Error("Workflow name is required");
+      if (isCampaignNameTaken(name, campaigns)) {
+        throw new Error(campaignNameDuplicateMessage(name));
+      }
+
       const { data, error } = await supabase
         .from("campaigns")
-        .insert({ user_id: user!.id, name: newName, daily_limit: parseInt(dailyLimit) || 500 })
+        .insert({ user_id: user!.id, name, daily_limit: parseInt(dailyLimit) || 500 })
         .select()
         .single();
-      if (error) throw error;
+      if (error) {
+        const conflict = parseCampaignNameConflict(error);
+        if (conflict) throw new Error(conflict);
+        throw error;
+      }
 
       const defaultSteps = [
         { campaign_id: data.id, step_number: 1, delay_days: 0, delay_value: 0, delay_unit: "days" },
@@ -123,15 +160,23 @@ const Campaigns = () => {
         { campaign_id: data.id, step_number: 5, delay_days: 14, delay_value: 14, delay_unit: "days" },
       ];
       await supabase.from("campaign_steps").insert(defaultSteps);
+      return data;
     },
-    onSuccess: () => {
+    onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ["campaigns"] });
       queryClient.invalidateQueries({ queryKey: ["campaign-steps"] });
       setCreateOpen(false);
       setNewName("");
-      toast.success("Campaign created with 5 follow-up steps!");
+      if (isWorkflowsPage && data?.id) {
+        setExpandedCampaign(data.id);
+      }
+      toast.success(
+        isWorkflowsPage
+          ? "Workflow created with 5 follow-up steps!"
+          : "Campaign created with 5 follow-up steps!",
+      );
     },
-    onError: (err: any) => toast.error(err.message),
+    onError: (err: Error) => toast.error(err.message),
   });
 
   const assignTemplate = useMutation({
@@ -205,10 +250,25 @@ const Campaigns = () => {
       const { error } = await supabase.from("campaigns").delete().eq("id", id);
       if (error) throw error;
     },
-    onSuccess: () => {
+    onSuccess: (_data, id) => {
       queryClient.invalidateQueries({ queryKey: ["campaigns"] });
+      if (expandedCampaign === id) setExpandedCampaign(null);
       toast.success("Campaign deleted");
     },
+  });
+
+  const removeDuplicateWorkflows = useMutation({
+    mutationFn: async (ids: string[]) => {
+      const { error } = await supabase.from("campaigns").delete().in("id", ids);
+      if (error) throw error;
+    },
+    onSuccess: (_data, ids) => {
+      queryClient.invalidateQueries({ queryKey: ["campaigns"] });
+      queryClient.invalidateQueries({ queryKey: ["campaign-steps"] });
+      if (expandedCampaign && ids.includes(expandedCampaign)) setExpandedCampaign(null);
+      toast.success(`Removed ${ids.length} duplicate workflow${ids.length === 1 ? "" : "s"}`);
+    },
+    onError: (err: Error) => toast.error(err.message),
   });
 
   const getStepsForCampaign = (campaignId: string) =>
@@ -220,63 +280,312 @@ const Campaigns = () => {
     return t ? t.name : null;
   };
 
-  const getTimingDraft = (step: CampaignStep): TimingDraft =>
-    timingDrafts[step.id] || {
-      value: String(getStepTiming(step).value),
-      unit: getStepTiming(step).unit,
-    };
+  const filteredCampaigns = useMemo(() => {
+    const list = campaigns.filter((c: { name: string; status: string }) => {
+      const matchSearch = !search || c.name.toLowerCase().includes(search.toLowerCase());
+      const matchStatus =
+        statusFilter === "all" || c.status.toLowerCase() === statusFilter.toLowerCase();
+      return matchSearch && matchStatus;
+    });
+    return [...list].sort((a: { name: string; created_at: string }, b: { name: string; created_at: string }) => {
+      if (sortBy === "name") return a.name.localeCompare(b.name);
+      if (sortBy === "oldest") return new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
+      return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+    });
+  }, [campaigns, search, sortBy, statusFilter]);
+
+  const { displayCampaigns, duplicateWorkflowIds } = useMemo(() => {
+    if (!isWorkflowsPage) {
+      return { displayCampaigns: filteredCampaigns, duplicateWorkflowIds: [] as string[] };
+    }
+    const { unique, duplicateIds } = partitionDuplicateCampaigns(filteredCampaigns);
+    return { displayCampaigns: unique, duplicateWorkflowIds: duplicateIds };
+  }, [filteredCampaigns, isWorkflowsPage]);
+
+  const statusLabel = (campaign: { status: string; updated_at?: string; created_at: string }) => {
+    const edited = campaign.updated_at || campaign.created_at;
+    const ago = formatDistanceToNow(new Date(edited), { addSuffix: false });
+    return `${campaign.status} · last edited ${ago} ago`;
+  };
+
+  const expandedCampaignData = expandedCampaign
+    ? campaigns.find((c: { id: string }) => c.id === expandedCampaign)
+    : null;
+
+  const renderStepsPanel = (campaignId: string) => {
+    const steps = getStepsForCampaign(campaignId);
+    return (
+      <CampaignStepsPanel
+        steps={steps}
+        templates={templates}
+        timingDrafts={timingDrafts}
+        onTimingDraftChange={(stepId, draft) =>
+          setTimingDrafts((prev) => ({ ...prev, [stepId]: draft }))
+        }
+        onSaveTiming={(stepId, delayValue, delayUnit) =>
+          updateStepTiming.mutate({ stepId, delayValue, delayUnit })
+        }
+        onAssignTemplate={(stepId, templateId) =>
+          assignTemplate.mutate({ stepId, templateId })
+        }
+        formatStepDelay={formatStepDelay}
+        getTemplateName={getTemplateName}
+        isSavingTiming={updateStepTiming.isPending}
+      />
+    );
+  };
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-display font-bold text-foreground">Campaigns</h1>
-          <p className="text-muted-foreground text-sm mt-1">Manage your email sequences</p>
-        </div>
-        <div className="flex items-center gap-2">
-          <Button size="sm" onClick={() => navigate("/campaigns/new")} className="rounded-full">
-            <Plus className="w-4 h-4 mr-2" />New Campaign
-          </Button>
-        <Dialog open={createOpen} onOpenChange={setCreateOpen}>
-          <DialogTrigger asChild>
-            <Button size="sm" variant="outline">Sequence</Button>
-          </DialogTrigger>
+    <div>
+      <PageToolbar
+        title={isWorkflowsPage ? "My workflows" : "My campaigns"}
+        search={search}
+        onSearchChange={setSearch}
+        sortValue={sortBy}
+        onSortChange={setSortBy}
+        statusValue={statusFilter}
+        onStatusChange={setStatusFilter}
+        statusOptions={[
+          { value: "all", label: "All" },
+          { value: "draft", label: "Draft" },
+          { value: "running", label: "Running" },
+          { value: "paused", label: "Paused" },
+          { value: "completed", label: "Completed" },
+        ]}
+        viewMode={viewMode}
+        onViewModeChange={setViewMode}
+        primaryAction={
+          isWorkflowsPage
+            ? { label: "+ New workflow", onClick: () => setCreateOpen(true) }
+            : { label: "+ New campaign", onClick: () => navigate("/campaigns/new") }
+        }
+        extraActions={
+          <Dialog open={createOpen} onOpenChange={setCreateOpen}>
+          {!isWorkflowsPage && (
+            <DialogTrigger asChild>
+              <Button size="sm" variant="ghost" className="text-muted-foreground sm:inline-flex">
+                Sequence
+              </Button>
+            </DialogTrigger>
+          )}
           <DialogContent>
-            <DialogHeader><DialogTitle className="font-display">Create Campaign</DialogTitle></DialogHeader>
+            <DialogHeader>
+              <DialogTitle>{isWorkflowsPage ? "Create workflow" : "Create campaign"}</DialogTitle>
+            </DialogHeader>
             <div className="space-y-4">
               <div className="space-y-2">
-                <Label>Campaign Name</Label>
-                <Input placeholder="Q1 SaaS Outreach" value={newName} onChange={(e) => setNewName(e.target.value)} />
+                <Label>{isWorkflowsPage ? "Workflow name" : "Campaign name"}</Label>
+                <Input
+                  placeholder="Q1 SaaS Outreach"
+                  value={newName}
+                  onChange={(e) => setNewName(e.target.value)}
+                  className={isNewNameTaken ? "border-destructive" : undefined}
+                />
+                {isNewNameTaken && (
+                  <p className="text-xs text-destructive">
+                    {campaignNameDuplicateMessage(trimmedNewName)}
+                  </p>
+                )}
               </div>
               <div className="space-y-2">
                 <Label>Daily Sending Limit</Label>
                 <Input type="number" value={dailyLimit} onChange={(e) => setDailyLimit(e.target.value)} />
               </div>
-              <p className="text-xs text-muted-foreground">5 follow-up steps will be created automatically. You can customize each step timing in hours or days after creation.</p>
-              <Button onClick={() => createCampaign.mutate()} disabled={createCampaign.isPending || !newName}>
-                {createCampaign.isPending ? "Creating..." : "Create Campaign"}
+              {isWorkflowsPage && campaigns.length > 0 && (
+                <div className="rounded-md border border-border bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
+                  <p className="font-medium text-foreground">Names already used</p>
+                  <p className="mt-1">
+                    {campaigns.map((c: { name: string }) => c.name).join(" · ")}
+                  </p>
+                </div>
+              )}
+              <p className="text-xs text-muted-foreground">
+                {isWorkflowsPage
+                  ? "Each workflow name must be unique on this page. 5 follow-up steps are created automatically."
+                  : "Each campaign name must be unique. 5 follow-up steps are created automatically."}
+              </p>
+              <Button
+                onClick={() => createCampaign.mutate()}
+                disabled={createCampaign.isPending || !trimmedNewName || isNewNameTaken}
+              >
+                {createCampaign.isPending
+                  ? "Creating..."
+                  : isWorkflowsPage
+                    ? "Create workflow"
+                    : "Create campaign"}
               </Button>
             </div>
           </DialogContent>
         </Dialog>
-        </div>
-      </div>
+        }
+      />
 
+      <div className="mx-auto max-w-[1400px] px-4 py-8 sm:px-6 lg:px-10">
+      {isWorkflowsPage && duplicateWorkflowIds.length > 0 && (
+        <div className="mb-6 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-warning/30 bg-warning/10 px-4 py-3">
+          <p className="text-sm text-foreground">
+            You have {duplicateWorkflowIds.length} duplicate workflow
+            {duplicateWorkflowIds.length === 1 ? "" : "s"} with the same name. Only one sequence per
+            name is allowed.
+          </p>
+          <Button
+            size="sm"
+            variant="outline"
+            disabled={removeDuplicateWorkflows.isPending}
+            onClick={() => removeDuplicateWorkflows.mutate(duplicateWorkflowIds)}
+          >
+            Remove duplicates
+          </Button>
+        </div>
+      )}
       {isLoading ? (
         <p className="text-muted-foreground">Loading...</p>
       ) : campaigns.length === 0 ? (
-        <div className="stat-card !p-8 text-center">
-          <p className="text-muted-foreground">No campaigns yet. Create one to start sending emails.</p>
+        <div className="rounded-lg border border-dashed border-border py-16 text-center">
+          <p className="text-muted-foreground">
+            {isWorkflowsPage
+              ? "No workflows yet. Create one with a unique name to start your email sequence."
+              : "No campaigns yet. Create one to start sending emails."}
+          </p>
+          {isWorkflowsPage && (
+            <Button className="mt-4" onClick={() => setCreateOpen(true)}>
+              + New workflow
+            </Button>
+          )}
         </div>
-      ) : (
-        <div className="grid gap-4">
-          {campaigns.map((campaign: any, i: number) => {
+      ) : viewMode === "grid" ? (
+          <>
+            <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+              {displayCampaigns.map((campaign: any) => {
+                const isExpanded = expandedCampaign === campaign.id;
+                return (
+                  <ContentCard
+                    key={campaign.id}
+                    title={campaign.name}
+                    statusLabel={statusLabel(campaign)}
+                    previewSubtitle="Email sequence"
+                    previewTitle={
+                      campaign.name.length > 28 ? campaign.name.slice(0, 28) + "…" : campaign.name
+                    }
+                    selected={isExpanded}
+                    onClick={() => setExpandedCampaign(campaign.id)}
+                  />
+                );
+              })}
+            </div>
+
+            {isWorkflowsPage ? (
+              <WorkflowDetailSheet
+                open={!!expandedCampaign}
+                onOpenChange={(open) => {
+                  if (!open) setExpandedCampaign(null);
+                }}
+                campaign={expandedCampaignData ?? null}
+                steps={expandedCampaign ? getStepsForCampaign(expandedCampaign) : []}
+                templates={templates}
+                timingDrafts={timingDrafts}
+                assignedCount={
+                  expandedCampaign
+                    ? getStepsForCampaign(expandedCampaign).filter((s) => s.template_id).length
+                    : 0
+                }
+                onTimingDraftChange={(stepId, draft) =>
+                  setTimingDrafts((prev) => ({ ...prev, [stepId]: draft }))
+                }
+                onSaveTiming={(stepId, delayValue, delayUnit) =>
+                  updateStepTiming.mutate({ stepId, delayValue, delayUnit })
+                }
+                onAssignTemplate={(stepId, templateId) =>
+                  assignTemplate.mutate({ stepId, templateId })
+                }
+                formatStepDelay={formatStepDelay}
+                getTemplateName={getTemplateName}
+                isSavingTiming={updateStepTiming.isPending}
+                onViewAnalytics={() =>
+                  expandedCampaign && navigate(`/analytics?campaign=${expandedCampaign}`)
+                }
+                onPause={() =>
+                  expandedCampaign &&
+                  updateStatus.mutate({ id: expandedCampaign, status: "Paused" })
+                }
+                onStart={() =>
+                  expandedCampaign &&
+                  updateStatus.mutate({ id: expandedCampaign, status: "Running" })
+                }
+                onDelete={() =>
+                  expandedCampaign && deleteCampaign.mutate(expandedCampaign)
+                }
+              />
+            ) : (
+              <AnimatePresence>
+                {expandedCampaign && expandedCampaignData && (
+                  <motion.div
+                    key={expandedCampaign}
+                    initial={{ opacity: 0, y: 8 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: 8 }}
+                    transition={{ duration: 0.2 }}
+                    className="mt-8"
+                  >
+                    <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+                      <div>
+                        <h2 className="font-display text-lg font-semibold text-foreground">
+                          {expandedCampaignData.name}
+                        </h2>
+                        <p className="mt-1 text-sm text-muted-foreground">
+                          Assign email templates and timing for each step in this workflow.
+                        </p>
+                      </div>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => navigate(`/analytics?campaign=${expandedCampaign}`)}
+                        >
+                          <BarChart3 className="mr-2 h-4 w-4" />
+                          View analytics
+                        </Button>
+                        {expandedCampaignData.status === "Running" && (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() =>
+                              updateStatus.mutate({ id: expandedCampaign, status: "Paused" })
+                            }
+                          >
+                            <Pause className="mr-2 h-4 w-4" />
+                            Pause
+                          </Button>
+                        )}
+                        {(expandedCampaignData.status === "Paused" ||
+                          expandedCampaignData.status === "Draft") && (
+                          <Button
+                            size="sm"
+                            onClick={() =>
+                              updateStatus.mutate({ id: expandedCampaign, status: "Running" })
+                            }
+                          >
+                            <Play className="mr-2 h-4 w-4" />
+                            Start
+                          </Button>
+                        )}
+                      </div>
+                    </div>
+                    {renderStepsPanel(expandedCampaign)}
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            )}
+          </>
+        ) : (
+          <div className="space-y-3">
+          {filteredCampaigns.map((campaign: any, i: number) => {
             const steps = getStepsForCampaign(campaign.id);
             const isExpanded = expandedCampaign === campaign.id;
             const assignedCount = steps.filter((s: any) => s.template_id).length;
 
             return (
-              <motion.div key={campaign.id} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.05 }} className="stat-card !p-0 overflow-hidden">
+              <motion.div key={campaign.id} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.05 }} className="overflow-hidden rounded-lg border border-border bg-card">
                 <div className="p-5">
                   <div className="flex items-center justify-between">
                     <div className="flex-1 min-w-0">
@@ -316,8 +625,11 @@ const Campaigns = () => {
                           <button className="p-2 rounded-lg hover:bg-muted transition-colors"><MoreHorizontal className="w-4 h-4 text-muted-foreground" /></button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
+                          <DropdownMenuItem onClick={() => navigate(`/analytics?campaign=${campaign.id}`)}>
+                            <BarChart3 className="w-4 h-4 mr-2" />View analytics
+                          </DropdownMenuItem>
                           <DropdownMenuItem onClick={() => navigate(`/campaigns/${campaign.id}/report`)}>
-                            <BarChart3 className="w-4 h-4 mr-2" />View Report
+                            <BarChart3 className="w-4 h-4 mr-2" />View report
                           </DropdownMenuItem>
                           <DropdownMenuItem onClick={() => deleteCampaign.mutate(campaign.id)} className="text-destructive">
                             <Trash2 className="w-4 h-4 mr-2" />Delete
@@ -337,103 +649,8 @@ const Campaigns = () => {
                       transition={{ duration: 0.2 }}
                       className="overflow-hidden"
                     >
-                      <div className="border-t border-border px-5 py-4 space-y-3 bg-muted/30">
-                        <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Email Sequence Steps</p>
-                        {steps.length === 0 ? (
-                          <p className="text-sm text-muted-foreground">No steps found for this campaign.</p>
-                        ) : (
-                          steps.map((step: CampaignStep) => {
-                            const templateName = getTemplateName(step.template_id);
-                            const timingDraft = getTimingDraft(step);
-                            return (
-                              <div key={step.id} className="flex items-start gap-3 rounded-lg border border-border bg-background p-3">
-                                <div className="flex items-center justify-center w-8 h-8 rounded-full bg-primary/10 text-primary text-sm font-semibold shrink-0">
-                                  {step.step_number}
-                                </div>
-                                <div className="flex-1 min-w-0">
-                                  <p className="text-sm font-medium text-foreground">
-                                    {stepLabels[step.step_number] || `Step ${step.step_number}`}
-                                  </p>
-                                  <p className="text-xs text-muted-foreground mt-0.5">{formatStepDelay(step)}</p>
-                                  {templateName && (
-                                    <p className="text-xs text-muted-foreground flex items-center gap-1 mt-0.5">
-                                      <Mail className="w-3 h-3" /> {templateName}
-                                    </p>
-                                  )}
-                                </div>
-                                <div className="flex flex-col gap-2 sm:flex-row sm:items-start">
-                                  <div className="flex items-center gap-2">
-                                    <Input
-                                      type="number"
-                                      min="0"
-                                      value={timingDraft.value}
-                                      onChange={(e) =>
-                                        setTimingDrafts((prev) => ({
-                                          ...prev,
-                                          [step.id]: { ...timingDraft, value: e.target.value },
-                                        }))
-                                      }
-                                      className="w-20 h-9 text-sm"
-                                    />
-                                    <Select
-                                      value={timingDraft.unit}
-                                      onValueChange={(value) =>
-                                        setTimingDrafts((prev) => ({
-                                          ...prev,
-                                          [step.id]: { ...timingDraft, unit: value as "days" | "hours" },
-                                        }))
-                                      }
-                                    >
-                                      <SelectTrigger className="w-[100px] h-9 text-sm">
-                                        <SelectValue />
-                                      </SelectTrigger>
-                                      <SelectContent>
-                                        <SelectItem value="days">Days</SelectItem>
-                                        <SelectItem value="hours">Hours</SelectItem>
-                                      </SelectContent>
-                                    </Select>
-                                    <Button
-                                      size="sm"
-                                      variant="outline"
-                                      className="h-9"
-                                      onClick={() =>
-                                        updateStepTiming.mutate({
-                                          stepId: step.id,
-                                          delayValue: Math.max(0, parseInt(timingDraft.value || "0", 10) || 0),
-                                          delayUnit: timingDraft.unit,
-                                        })
-                                      }
-                                      disabled={updateStepTiming.isPending}
-                                    >
-                                      Save timing
-                                    </Button>
-                                  </div>
-                                  <Select
-                                    value={step.template_id || "none"}
-                                    onValueChange={(val) =>
-                                      assignTemplate.mutate({
-                                        stepId: step.id,
-                                        templateId: val === "none" ? null : val,
-                                      })
-                                    }
-                                  >
-                                    <SelectTrigger className="w-[200px] h-9 text-sm">
-                                      <SelectValue placeholder="Assign template" />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                      <SelectItem value="none">No template</SelectItem>
-                                      {templates.map((t: any) => (
-                                        <SelectItem key={t.id} value={t.id}>
-                                          {t.name} ({t.type})
-                                        </SelectItem>
-                                      ))}
-                                    </SelectContent>
-                                  </Select>
-                                </div>
-                              </div>
-                            );
-                          })
-                        )}
+                      <div className="border-t border-border bg-muted/30 px-5 py-4">
+                        {renderStepsPanel(campaign.id)}
                       </div>
                     </motion.div>
                   )}
@@ -443,6 +660,7 @@ const Campaigns = () => {
           })}
         </div>
       )}
+      </div>
     </div>
   );
 };

@@ -16,7 +16,7 @@ const EmptyState = ({ icon: Icon, title, description, actionLabel, onAction, bad
     initial={{ opacity: 0, y: 12 }}
     animate={{ opacity: 1, y: 0 }}
     transition={{ duration: 0.4 }}
-    className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-border bg-card/50 px-6 py-16 text-center"
+    className="flex flex-col items-center justify-center rounded-lg border border-dashed border-border bg-card px-6 py-16 text-center"
   >
     <div className="mb-5 flex h-16 w-16 items-center justify-center rounded-2xl bg-primary/10">
       <Icon className="h-8 w-8 text-primary" />

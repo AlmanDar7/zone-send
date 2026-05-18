@@ -134,11 +134,14 @@ const Dashboard = () => {
   });
 
   return (
-    <div className="space-y-8">
-      <div>
-        <h1 className="text-2xl font-display font-bold text-foreground">Dashboard</h1>
-        <p className="text-muted-foreground text-sm mt-1">Campaign overview and analytics</p>
+    <div>
+      <div className="border-b border-border bg-card px-4 py-6 sm:px-6 lg:px-10">
+        <div className="mx-auto max-w-[1400px]">
+          <h1 className="text-xl font-semibold text-foreground">Dashboard</h1>
+          <p className="mt-1 text-sm text-muted-foreground">Campaign overview and analytics</p>
+        </div>
       </div>
+      <div className="mx-auto max-w-[1400px] space-y-8 px-4 py-8 sm:px-6 lg:px-10">
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5">
         <StatCard icon={Users} title="Total Contacts" value={contacts?.toLocaleString() || "0"} />
@@ -154,15 +157,15 @@ const Dashboard = () => {
             <AreaChart data={emailData}>
               <defs>
                 <linearGradient id="sentGradD" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor="hsl(168, 80%, 36%)" stopOpacity={0.3} />
-                  <stop offset="100%" stopColor="hsl(168, 80%, 36%)" stopOpacity={0} />
+                  <stop offset="0%" stopColor="hsl(158, 64%, 32%)" stopOpacity={0.25} />
+                  <stop offset="100%" stopColor="hsl(158, 64%, 32%)" stopOpacity={0} />
                 </linearGradient>
               </defs>
               <CartesianGrid strokeDasharray="3 3" stroke="hsl(220, 13%, 91%)" />
               <XAxis dataKey="date" tick={{ fontSize: 12, fill: "hsl(220, 9%, 46%)" }} />
               <YAxis tick={{ fontSize: 12, fill: "hsl(220, 9%, 46%)" }} />
               <Tooltip contentStyle={{ background: "hsl(0, 0%, 100%)", border: "1px solid hsl(220, 13%, 91%)", borderRadius: "8px", fontSize: "12px" }} />
-              <Area type="monotone" dataKey="sent" stroke="hsl(168, 80%, 36%)" fill="url(#sentGradD)" strokeWidth={2} name="Sent" />
+              <Area type="monotone" dataKey="sent" stroke="hsl(158, 64%, 32%)" fill="url(#sentGradD)" strokeWidth={2} name="Sent" />
               <Area type="monotone" dataKey="opens" stroke="hsl(210, 92%, 55%)" fill="transparent" strokeWidth={2} strokeDasharray="4 4" name="Opens" />
             </AreaChart>
           </ResponsiveContainer>
@@ -223,6 +226,7 @@ const Dashboard = () => {
           <p className="text-sm text-muted-foreground">No campaigns yet. Create one to start sending emails.</p>
         )}
       </motion.div>
+      </div>
     </div>
   );
 };

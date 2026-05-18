@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@300;400;500;600&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,600;0,700;1,400&family=Inter:wght@300;400;500;600&display=swap');
 
 @tailwind base;
 @tailwind components;
@@ -6,63 +6,57 @@
 
 @layer base {
   :root {
-    --background: 220 20% 97%;
-    --foreground: 222 47% 11%;
+    --background: 0 0% 100%;
+    --foreground: 160 25% 12%;
 
     --card: 0 0% 100%;
-    --card-foreground: 222 47% 11%;
+    --card-foreground: 160 25% 12%;
 
     --popover: 0 0% 100%;
-    --popover-foreground: 222 47% 11%;
+    --popover-foreground: 160 25% 12%;
 
-    --primary: 168 80% 36%;
+    --primary: 158 64% 32%;
     --primary-foreground: 0 0% 100%;
 
-    --secondary: 220 20% 93%;
-    --secondary-foreground: 222 47% 11%;
+    --secondary: 150 25% 96%;
+    --secondary-foreground: 160 25% 12%;
 
-    --muted: 220 14% 96%;
-    --muted-foreground: 220 9% 46%;
+    --muted: 150 20% 96%;
+    --muted-foreground: 160 10% 42%;
 
-    --accent: 168 80% 36%;
-    --accent-foreground: 0 0% 100%;
+    --accent: 158 45% 94%;
+    --accent-foreground: 158 64% 26%;
 
     --destructive: 0 72% 51%;
     --destructive-foreground: 0 0% 100%;
 
-    --border: 220 13% 91%;
-    --input: 220 13% 91%;
-    --ring: 168 80% 36%;
+    --border: 150 15% 90%;
+    --input: 150 15% 90%;
+    --ring: 158 64% 32%;
 
-    --radius: 0.625rem;
+    --radius: 0.5rem;
 
-    --sidebar-bg: 222 47% 11%;
-    --sidebar-fg: 220 20% 80%;
-    --sidebar-fg-active: 0 0% 100%;
-    --sidebar-accent: 222 30% 18%;
-    --sidebar-border: 222 30% 20%;
-
-    --success: 152 69% 40%;
+    --success: 158 64% 32%;
     --success-foreground: 0 0% 100%;
-    --warning: 38 92% 50%;
+    --warning: 38 80% 48%;
     --warning-foreground: 0 0% 100%;
-    --info: 210 92% 55%;
+    --info: 210 60% 48%;
     --info-foreground: 0 0% 100%;
 
-    --chart-1: 168 80% 36%;
-    --chart-2: 210 92% 55%;
-    --chart-3: 38 92% 50%;
-    --chart-4: 280 65% 60%;
+    --chart-1: 158 64% 32%;
+    --chart-2: 158 45% 50%;
+    --chart-3: 38 80% 48%;
+    --chart-4: 180 40% 45%;
     --chart-5: 0 72% 51%;
 
-    --sidebar-background: 222 47% 11%;
-    --sidebar-foreground: 220 20% 80%;
-    --sidebar-primary: 168 80% 36%;
+    --sidebar-background: 0 0% 100%;
+    --sidebar-foreground: 160 10% 42%;
+    --sidebar-primary: 158 64% 32%;
     --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 222 30% 18%;
-    --sidebar-accent-foreground: 0 0% 100%;
-    --sidebar-border: 222 30% 20%;
-    --sidebar-ring: 168 80% 36%;
+    --sidebar-accent: 150 25% 96%;
+    --sidebar-accent-foreground: 160 25% 12%;
+    --sidebar-border: 150 15% 90%;
+    --sidebar-ring: 158 64% 32%;
   }
 }
 
@@ -74,16 +68,16 @@
     @apply bg-background text-foreground font-body antialiased;
   }
   h1, h2, h3, h4, h5, h6 {
-    @apply font-display;
+    @apply font-body font-semibold tracking-tight;
   }
 }
 
 @layer utilities {
   .glass-card {
-    @apply bg-card/80 backdrop-blur-sm border border-border shadow-sm;
+    @apply bg-card border border-border shadow-sm;
   }
   .stat-card {
-    @apply bg-card rounded-xl border border-border p-6 shadow-sm transition-shadow hover:shadow-md;
+    @apply bg-card rounded-lg border border-border p-6 shadow-sm transition-shadow hover:shadow-md;
   }
   .status-active {
     @apply bg-primary/10 text-primary;
@@ -99,5 +93,8 @@
   }
   .status-completed {
     @apply bg-info/10 text-info;
+  }
+  .flodesk-preview {
+    @apply bg-primary text-primary-foreground;
   }
 }

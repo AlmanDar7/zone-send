@@ -149,7 +149,7 @@ const CampaignReport = () => {
               <XAxis dataKey="name" tick={{ fontSize: 12, fill: "hsl(220, 9%, 46%)" }} />
               <YAxis tick={{ fontSize: 12, fill: "hsl(220, 9%, 46%)" }} />
               <Tooltip contentStyle={{ background: "hsl(0, 0%, 100%)", border: "1px solid hsl(220, 13%, 91%)", borderRadius: "8px", fontSize: "12px" }} />
-              <Bar dataKey="sent" fill="hsl(168, 80%, 36%)" name="Sent" radius={[4,4,0,0]} />
+              <Bar dataKey="sent" fill="hsl(158, 64%, 32%)" name="Sent" radius={[4,4,0,0]} />
               <Bar dataKey="opens" fill="hsl(210, 92%, 55%)" name="Opens" radius={[4,4,0,0]} />
               <Bar dataKey="clicks" fill="hsl(38, 92%, 50%)" name="Clicks" radius={[4,4,0,0]} />
             </BarChart>

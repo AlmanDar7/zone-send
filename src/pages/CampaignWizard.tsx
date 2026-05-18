@@ -28,6 +28,11 @@ import { cn } from "@/lib/utils";
 import * as XLSX from "xlsx";
 import { startQueueProcessor } from "@/lib/queueProcessor";
 import { getSmtpConfigError, hasUsableSmtpConfig } from "@/lib/smtpValidation";
+import {
+  campaignNameDuplicateMessage,
+  isCampaignNameTaken,
+  parseCampaignNameConflict,
+} from "@/lib/campaign-names";
 
 import StepIndicator from "@/components/wizard/StepIndicator";
 import SuccessModal from "@/components/wizard/SuccessModal";
@@ -107,6 +112,25 @@ const CampaignWizard = () => {
     },
     enabled: !!user,
   });
+
+  const { data: existingCampaigns = [] } = useQuery({
+    queryKey: ["campaigns", user?.id],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("campaigns")
+        .select("id, name")
+        .eq("user_id", user!.id);
+      if (error) throw error;
+      return data;
+    },
+    enabled: !!user,
+  });
+
+  const trimmedCampaignName = campaignName.trim();
+  const isCampaignNameDuplicate = useMemo(
+    () => isCampaignNameTaken(trimmedCampaignName, existingCampaigns),
+    [trimmedCampaignName, existingCampaigns],
+  );
 
   const { data: folders = [] } = useQuery({
     queryKey: ["wizard-folders", user?.id],
@@ -351,7 +375,11 @@ const CampaignWizard = () => {
       if (!user) throw new Error("Not authenticated");
       if (!selectedTemplate) throw new Error("Pick a template");
       if (recipientIds.length === 0) throw new Error("Select at least one recipient");
-      if (!campaignName) throw new Error("Campaign name required");
+      const name = campaignName.trim();
+      if (!name) throw new Error("Workflow name is required");
+      if (isCampaignNameTaken(name, existingCampaigns)) {
+        throw new Error(campaignNameDuplicateMessage(name));
+      }
       if (!subject) throw new Error("Subject required");
       if (!hasUsableSmtpConfig(smtp)) throw new Error(getSmtpConfigError());
 
@@ -385,12 +413,16 @@ const CampaignWizard = () => {
         .from("campaigns")
         .insert({
           user_id: user.id,
-          name: campaignName,
+          name,
           status: sendMode === "now" ? "Running" : "Draft",
         })
         .select()
         .single();
-      if (cErr) throw cErr;
+      if (cErr) {
+        const conflict = parseCampaignNameConflict(cErr);
+        if (conflict) throw new Error(conflict);
+        throw cErr;
+      }
 
       // Single step pointing to template
       const { error: sErr } = await supabase.from("campaign_steps").insert({
@@ -459,7 +491,7 @@ const CampaignWizard = () => {
   const canContinue = () => {
     if (step === 1) return !!selectedTemplate;
     if (step === 2) return recipientIds.length > 0;
-    if (step === 3) return !!campaignName && !!subject && !!senderEmail;
+    if (step === 3) return !!trimmedCampaignName && !isCampaignNameDuplicate && !!subject && !!senderEmail;
     if (step === 4) return sendMode === "now" || !!scheduleDate;
     return false;
   };
@@ -583,6 +615,7 @@ const CampaignWizard = () => {
               <Step3Details
                 campaignName={campaignName}
                 onCampaignName={setCampaignName}
+                isCampaignNameDuplicate={isCampaignNameDuplicate}
                 subject={subject}
                 onSubject={setSubject}
                 previewText={previewText}
@@ -1065,10 +1098,11 @@ const Step2Audience = ({
 
 /* =================== STEP 3 =================== */
 const Step3Details = ({
-  campaignName, onCampaignName, subject, onSubject, previewText, onPreviewText,
+  campaignName, onCampaignName, isCampaignNameDuplicate, subject, onSubject, previewText, onPreviewText,
   senderName, onSenderName, senderEmail, onSenderEmail, renderedHtml, renderedBody,
 }: {
   campaignName: string; onCampaignName: (v: string) => void;
+  isCampaignNameDuplicate?: boolean;
   subject: string; onSubject: (v: string) => void;
   previewText: string; onPreviewText: (v: string) => void;
   senderName: string; onSenderName: (v: string) => void;
@@ -1097,8 +1131,19 @@ const Step3Details = ({
       <div className="grid gap-6 lg:grid-cols-[1fr_1fr]">
         <div className="space-y-5">
           <div className="space-y-2">
-            <Label>Campaign name (internal)</Label>
-            <Input value={campaignName} onChange={(e) => onCampaignName(e.target.value)} placeholder="May Newsletter" />
+            <Label>Workflow name (internal)</Label>
+            <Input
+              value={campaignName}
+              onChange={(e) => onCampaignName(e.target.value)}
+              placeholder="May Newsletter"
+              className={isCampaignNameDuplicate ? "border-destructive" : undefined}
+            />
+            {isCampaignNameDuplicate && (
+              <p className="text-xs text-destructive">
+                {campaignNameDuplicateMessage(campaignName)}
+              </p>
+            )}
+            <p className="text-xs text-muted-foreground">Each workflow must have a unique name.</p>
           </div>
 
           <div className="space-y-2">

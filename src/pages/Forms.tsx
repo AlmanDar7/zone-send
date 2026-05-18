@@ -1,7 +1,5 @@
-import Emails from "./Emails";
+import ContentGallery from "@/components/ContentGallery";
 
-// The Forms section currently surfaces the full email templates gallery
-// so users can manage all their email templates from here as well.
-const Forms = () => <Emails />;
+const Forms = () => <ContentGallery variant="forms" />;
 
 export default Forms;

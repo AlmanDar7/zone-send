@@ -7,7 +7,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
-import { Mail, Eye, EyeOff } from "lucide-react";
+import { Eye, EyeOff } from "lucide-react";
+import AppLogo from "@/components/AppLogo";
 import { motion } from "framer-motion";
 import { toast } from "sonner";
 
@@ -126,14 +127,9 @@ const Login = () => {
           animate={{ opacity: 1, y: 0 }}
           className="w-full max-w-sm space-y-8"
         >
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-primary flex items-center justify-center">
-              <Mail className="w-5 h-5 text-primary-foreground" />
-            </div>
-            <div>
-              <h1 className="font-display font-bold text-xl text-foreground">Reachquix</h1>
-              <p className="text-xs text-muted-foreground">Email Automation Platform</p>
-            </div>
+          <div className="space-y-2">
+            <AppLogo linkTo="" />
+            <p className="text-sm text-muted-foreground">Email automation platform</p>
           </div>
 
           <div>

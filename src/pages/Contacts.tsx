@@ -562,11 +562,11 @@ const Contacts = () => {
         </DialogContent>
       </Dialog>
 
-      {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="border-b border-border bg-card -mx-0 mb-6 px-4 py-5 sm:px-6">
+        <div className="flex flex-wrap items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-display font-bold text-foreground">Contacts</h1>
-          <p className="text-muted-foreground text-sm mt-1">{contacts.length} total contacts</p>
+          <h1 className="text-xl font-semibold text-foreground">My audience</h1>
+          <p className="mt-1 text-sm text-muted-foreground">{contacts.length} total contacts</p>
         </div>
         <div className="flex gap-2">
           <Button variant="outline" size="sm" onClick={syncGoogleSheets}><RefreshCw className="w-4 h-4 mr-2" />Sync Sheets</Button>
@@ -656,6 +656,7 @@ const Contacts = () => {
               </div>
             </DialogContent>
           </Dialog>
+        </div>
         </div>
       </div>
 

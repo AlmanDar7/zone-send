@@ -35,8 +35,8 @@ const StatCard = ({ title, value, change, changeType = "neutral", icon: Icon, ic
             </p>
           )}
         </div>
-        <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${iconColor || "bg-primary/10"}`}>
-          <Icon className={`w-5 h-5 ${iconColor ? "text-card" : "text-primary"}`} />
+        <div className={`flex h-10 w-10 items-center justify-center rounded-lg ${iconColor || "bg-muted"}`}>
+          <Icon className={`h-5 w-5 ${iconColor ? "text-card" : "text-foreground"}`} />
         </div>
       </div>
     </motion.div>

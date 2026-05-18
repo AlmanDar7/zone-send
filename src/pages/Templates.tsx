@@ -37,6 +37,7 @@ import {
   wrapLegacyAsDocument,
   type TemplateDocument,
 } from "@/lib/template-blocks";
+import { FORM_CATEGORY } from "@/lib/content-types";
 
 const variables = ["{{FirstName}}", "{{Email}}", "{{CompanyName}}"];
 const typeColors: Record<string, string> = {
@@ -54,17 +55,19 @@ type TemplateFormState = {
   subject: string;
   body: string;
   type: string;
+  category: string;
   template_format: TemplateFormat | "blocks";
   html_body: string | null;
   design_config: VisualTemplateConfig | null;
   blocks: TemplateDocument | null;
 };
 
-const createEmptyForm = (): TemplateFormState => ({
+const createEmptyForm = (category = "general"): TemplateFormState => ({
   name: "",
   subject: "",
   body: "",
   type: "Initial",
+  category,
   template_format: "plain",
   html_body: null,
   design_config: null,
@@ -97,6 +100,7 @@ const toFormState = (template: EmailTemplateRow): TemplateFormState => {
     subject: template.subject,
     body: template.body,
     type: template.type,
+    category: template.category,
     template_format: templateFormat,
     html_body: template.html_body,
     design_config: visualConfig,
@@ -129,11 +133,13 @@ const Templates = () => {
   useEffect(() => {
     const editId = searchParams.get("edit");
     const isNew = searchParams.get("new");
+    const categoryParam = searchParams.get("category");
     if (isNew) {
-      setForm(createEmptyForm());
+      setForm(createEmptyForm(categoryParam === "form" ? FORM_CATEGORY : "general"));
       setCreateOpen(true);
       const next = new URLSearchParams(searchParams);
       next.delete("new");
+      next.delete("category");
       setSearchParams(next, { replace: true });
       return;
     }
@@ -163,6 +169,7 @@ const Templates = () => {
         subject: form.subject,
         body: form.body,
         type: form.type,
+        category: form.category,
         template_format: form.template_format,
         html_body: form.html_body,
         design_config: form.design_config,
@@ -190,6 +197,7 @@ const Templates = () => {
           subject: form.subject,
           body: form.body,
           type: form.type,
+          category: form.category,
           template_format: form.template_format,
           html_body: form.html_body,
           design_config: form.design_config,
