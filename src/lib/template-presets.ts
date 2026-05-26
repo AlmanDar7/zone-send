@@ -5,8 +5,12 @@ export type VisualTemplatePresetId =
   | "product-showcase"
   | "newsletter-digest";
 
+import type { VisualSectionId } from "@/lib/visual-template-sections";
+import { buildLeadMagnetHtmlFromOrder } from "@/lib/visual-template-sections";
+
 export type VisualTemplateConfig = {
   presetId: VisualTemplatePresetId;
+  sectionOrder?: VisualSectionId[];
   brandName: string;
   eyebrow: string;
   headline: string;
@@ -286,7 +290,7 @@ export const buildVisualTemplateContent = (config: VisualTemplateConfig) => {
       ? showcaseLayout
       : config.presetId === "newsletter-digest"
         ? newsletterLayout
-        : leadMagnetLayout;
+        : buildLeadMagnetHtmlFromOrder(config);
 
   return {
     body: plainBody,

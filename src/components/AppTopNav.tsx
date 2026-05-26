@@ -17,6 +17,7 @@ import { useQuery } from "@tanstack/react-query";
 const navItems = [
   { to: "/emails", label: "Emails" },
   { to: "/forms", label: "Forms" },
+  { to: "/campaigns", label: "Campaigns" },
   { to: "/workflows", label: "Workflows" },
   { to: "/contacts", label: "Audience" },
   { to: "/analytics", label: "Analytics" },
@@ -48,7 +49,10 @@ const AppTopNav = () => {
 
   const isActive = (to: string) => {
     if (location.pathname === to) return true;
-    if (to === "/workflows" && (location.pathname.startsWith("/workflows") || location.pathname.startsWith("/campaigns"))) {
+    if (to === "/campaigns" && location.pathname.startsWith("/campaigns")) {
+      return true;
+    }
+    if (to === "/workflows" && location.pathname.startsWith("/workflows")) {
       return true;
     }
     if (to === "/analytics" && location.pathname.startsWith("/analytics")) return true;

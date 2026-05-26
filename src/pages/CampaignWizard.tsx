@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   ArrowLeft, ArrowRight, Check, Search, Users, Calendar as CalendarIcon,
-  Send, Clock, Sparkles, Monitor, Smartphone, Edit3, Eye, Folder,
+  Send, Clock, Sparkles, Edit3, Folder, LayoutTemplate,
   Upload, FileSpreadsheet, X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -28,28 +28,68 @@ import { cn } from "@/lib/utils";
 import * as XLSX from "xlsx";
 import { startQueueProcessor } from "@/lib/queueProcessor";
 import { getSmtpConfigError, hasUsableSmtpConfig } from "@/lib/smtpValidation";
-import {
-  campaignNameDuplicateMessage,
-  isCampaignNameTaken,
-  parseCampaignNameConflict,
-} from "@/lib/campaign-names";
+import { isCampaignNameTaken, parseCampaignNameConflict } from "@/lib/campaign-names";
 
 import StepIndicator from "@/components/wizard/StepIndicator";
 import SuccessModal from "@/components/wizard/SuccessModal";
 import TemplatePreview from "@/components/TemplatePreview";
 import BlockEditor from "@/components/BlockEditor";
+import VisualTemplateCanvas from "@/components/VisualTemplateCanvas";
 import TimezoneSelector from "@/components/TimezoneSelector";
 import {
   createEmptyDocument, isTemplateDocument, renderDocumentHtml, renderDocumentPlain,
   buildDocumentFromLegacy, type TemplateDocument,
 } from "@/lib/template-blocks";
-import { replaceTemplateVariables } from "@/lib/template-presets";
+import {
+  buildVisualTemplateContent,
+  getStarterTemplate,
+  replaceTemplateVariables,
+  sampleTemplateVariables,
+  visualTemplatePresets,
+  type TemplateVariableValues,
+  type VisualTemplateConfig,
+  type VisualTemplatePresetId,
+} from "@/lib/template-presets";
+import { DEFAULT_VISUAL_SECTION_ORDER } from "@/lib/visual-template-sections";
+import { isEmailContent } from "@/lib/content-types";
 
 type EmailRow = Database["public"]["Tables"]["email_templates"]["Row"];
 type ContactRow = Database["public"]["Tables"]["contacts"]["Row"];
 type FolderRow = Database["public"]["Tables"]["contact_folders"]["Row"];
 
-const STEPS = ["Template", "Audience", "Details", "Schedule"];
+const STEPS = ["Template", "From", "Subject", "Audience", "Send"];
+const TOTAL_STEPS = STEPS.length;
+
+type EditorFormat = "visual" | "blocks" | "plain";
+
+const isVisualTemplateConfig = (value: unknown): value is VisualTemplateConfig => {
+  if (!value || typeof value !== "object") return false;
+  return typeof (value as { presetId?: unknown }).presetId === "string";
+};
+
+const resolveEditorFormat = (t: EmailRow): EditorFormat => {
+  if (t.template_format === "blocks" && isTemplateDocument(t.blocks)) return "blocks";
+  if (t.template_format === "visual" || isVisualTemplateConfig(t.design_config)) return "visual";
+  return "plain";
+};
+
+const toVisualConfig = (t: EmailRow): VisualTemplateConfig => {
+  if (isVisualTemplateConfig(t.design_config)) {
+    return {
+      ...t.design_config,
+      sectionOrder: t.design_config.sectionOrder?.length
+        ? t.design_config.sectionOrder
+        : DEFAULT_VISUAL_SECTION_ORDER,
+    };
+  }
+  const fallback = getStarterTemplate("lead-magnet").design_config as VisualTemplateConfig;
+  return {
+    ...fallback,
+    headline: t.name,
+    body: t.body,
+    sectionOrder: DEFAULT_VISUAL_SECTION_ORDER,
+  };
+};
 
 const CampaignWizard = () => {
   const { user } = useAuth();
@@ -58,9 +98,12 @@ const CampaignWizard = () => {
 
   // Step 1
   const [selectedTemplate, setSelectedTemplate] = useState<EmailRow | null>(null);
+  const [editorFormat, setEditorFormat] = useState<EditorFormat>("visual");
+  const [designConfig, setDesignConfig] = useState<VisualTemplateConfig | null>(null);
   const [editorDoc, setEditorDoc] = useState<TemplateDocument | null>(null);
+  const [plainBody, setPlainBody] = useState("");
   const [editing, setEditing] = useState(false);
-  const [previewDevice, setPreviewDevice] = useState<"desktop" | "mobile">("desktop");
+  const [previewVariables, setPreviewVariables] = useState<TemplateVariableValues>(sampleTemplateVariables);
 
   // Step 2
   const [selectedFolderIds, setSelectedFolderIds] = useState<Set<string>>(new Set());
@@ -106,12 +149,33 @@ const CampaignWizard = () => {
     queryKey: ["wizard-templates", user?.id],
     queryFn: async () => {
       const { data, error } = await supabase
-        .from("email_templates").select("*").order("created_at", { ascending: false });
+        .from("email_templates")
+        .select("*")
+        .eq("user_id", user!.id)
+        .order("created_at", { ascending: false });
       if (error) throw error;
       return data as EmailRow[];
     },
     enabled: !!user,
   });
+
+  const savedEmailTemplates = useMemo(
+    () =>
+      templates.filter((t) => {
+        if (!isEmailContent(t)) return false;
+        const presetId = (t.design_config as VisualTemplateConfig | null)?.presetId;
+        if (!presetId) return true;
+        return !visualTemplatePresets.some((p) => p.id === presetId);
+      }),
+    [templates],
+  );
+
+  const presetStarters = useMemo(
+    () => visualTemplatePresets.map((preset) => ({ preset, starter: getStarterTemplate(preset.id) })),
+    [],
+  );
+
+  const [pickingPresetId, setPickingPresetId] = useState<VisualTemplatePresetId | null>(null);
 
   const { data: existingCampaigns = [] } = useQuery({
     queryKey: ["campaigns", user?.id],
@@ -127,10 +191,6 @@ const CampaignWizard = () => {
   });
 
   const trimmedCampaignName = campaignName.trim();
-  const isCampaignNameDuplicate = useMemo(
-    () => isCampaignNameTaken(trimmedCampaignName, existingCampaigns),
-    [trimmedCampaignName, existingCampaigns],
-  );
 
   const { data: folders = [] } = useQuery({
     queryKey: ["wizard-folders", user?.id],
@@ -344,30 +404,132 @@ const CampaignWizard = () => {
     });
   };
 
+  const initEditorFromTemplate = (t: EmailRow) => {
+    const format = resolveEditorFormat(t);
+    setEditorFormat(format);
+    if (format === "visual") {
+      setDesignConfig(toVisualConfig(t));
+      setEditorDoc(null);
+      setPlainBody("");
+    } else if (format === "blocks") {
+      setEditorDoc(toDoc(t));
+      setDesignConfig(null);
+      setPlainBody("");
+    } else {
+      setPlainBody(t.body);
+      setEditorDoc(null);
+      setDesignConfig(null);
+    }
+  };
+
   const startEditing = (t: EmailRow) => {
     setSelectedTemplate(t);
-    setEditorDoc(toDoc(t));
+    initEditorFromTemplate(t);
     if (!subject) setSubject(t.subject);
     if (!campaignName) setCampaignName(t.name);
     setEditing(true);
   };
 
-  const pickAndContinue = (t: EmailRow) => {
+  const pickTemplate = (t: EmailRow) => {
     setSelectedTemplate(t);
-    setEditorDoc(toDoc(t));
+    initEditorFromTemplate(t);
     if (!subject) setSubject(t.subject);
     if (!campaignName) setCampaignName(t.name);
-    setStep(2);
+    setEditing(true);
   };
 
-  const renderedHtml = useMemo(
-    () => (editorDoc ? renderDocumentHtml(editorDoc) : selectedTemplate?.html_body || ""),
-    [editorDoc, selectedTemplate],
-  );
-  const renderedPlain = useMemo(
-    () => (editorDoc ? renderDocumentPlain(editorDoc) : selectedTemplate?.body || ""),
-    [editorDoc, selectedTemplate],
-  );
+  const replaceVisualConfig = (nextConfig: VisualTemplateConfig) => {
+    setDesignConfig(nextConfig);
+  };
+
+  const updateVisualConfig = <K extends keyof VisualTemplateConfig>(key: K, value: VisualTemplateConfig[K]) => {
+    setDesignConfig((current) => {
+      const base =
+        current || (getStarterTemplate("lead-magnet").design_config as VisualTemplateConfig);
+      const nextConfig = { ...base, [key]: value } as VisualTemplateConfig;
+
+      if (
+        key === "brandName" &&
+        typeof value === "string" &&
+        base.footerNote.includes(base.brandName)
+      ) {
+        nextConfig.footerNote = base.footerNote.split(base.brandName).join(value);
+      }
+
+      if (!nextConfig.sectionOrder?.length) {
+        nextConfig.sectionOrder = DEFAULT_VISUAL_SECTION_ORDER;
+      }
+
+      return nextConfig;
+    });
+  };
+
+  const updateBlocksDoc = (doc: TemplateDocument) => {
+    setEditorDoc(doc);
+  };
+
+  const pickPreset = async (presetId: VisualTemplatePresetId) => {
+    if (!user) return;
+    setPickingPresetId(presetId);
+    try {
+      const existing = templates.find(
+        (t) =>
+          isEmailContent(t) &&
+          (t.design_config as VisualTemplateConfig | null)?.presetId === presetId,
+      );
+      if (existing) {
+        pickTemplate(existing);
+        return;
+      }
+
+      const starter = getStarterTemplate(presetId);
+      const { data, error } = await supabase
+        .from("email_templates")
+        .insert({
+          user_id: user.id,
+          name: starter.name,
+          subject: starter.subject,
+          body: starter.body,
+          type: starter.type,
+          category: "general",
+          template_format: "visual",
+          html_body: starter.html_body,
+          design_config: {
+            ...(starter.design_config as VisualTemplateConfig),
+            sectionOrder: DEFAULT_VISUAL_SECTION_ORDER,
+          },
+        })
+        .select()
+        .single();
+
+      if (error) throw error;
+      await queryClient.invalidateQueries({ queryKey: ["wizard-templates", user.id] });
+      pickTemplate(data as EmailRow);
+    } catch (e: unknown) {
+      toast.error(e instanceof Error ? e.message : "Could not load template");
+    } finally {
+      setPickingPresetId(null);
+    }
+  };
+
+  const resolveCampaignName = () => {
+    const base = trimmedCampaignName || selectedTemplate?.name || "Email campaign";
+    if (!isCampaignNameTaken(base, existingCampaigns)) return base;
+    return `${base} — ${format(new Date(), "MMM d, yyyy h:mm a")}`;
+  };
+
+  const renderedHtml = useMemo(() => {
+    if (designConfig) return buildVisualTemplateContent(designConfig).htmlBody;
+    if (editorDoc) return renderDocumentHtml(editorDoc);
+    return selectedTemplate?.html_body || "";
+  }, [designConfig, editorDoc, selectedTemplate]);
+
+  const renderedPlain = useMemo(() => {
+    if (designConfig) return buildVisualTemplateContent(designConfig).body;
+    if (editorDoc) return renderDocumentPlain(editorDoc);
+    if (plainBody) return plainBody;
+    return selectedTemplate?.body || "";
+  }, [designConfig, editorDoc, plainBody, selectedTemplate]);
 
   /* ----------------- Send ----------------- */
   const sendCampaign = useMutation({
@@ -375,10 +537,16 @@ const CampaignWizard = () => {
       if (!user) throw new Error("Not authenticated");
       if (!selectedTemplate) throw new Error("Pick a template");
       if (recipientIds.length === 0) throw new Error("Select at least one recipient");
-      const name = campaignName.trim();
-      if (!name) throw new Error("Workflow name is required");
-      if (isCampaignNameTaken(name, existingCampaigns)) {
-        throw new Error(campaignNameDuplicateMessage(name));
+      const name = resolveCampaignName();
+
+      if (smtp?.id && (senderName || senderEmail)) {
+        await supabase
+          .from("smtp_settings")
+          .update({
+            from_name: senderName || smtp.from_name,
+            from_email: senderEmail || smtp.from_email,
+          })
+          .eq("id", smtp.id);
       }
       if (!subject) throw new Error("Subject required");
       if (!hasUsableSmtpConfig(smtp)) throw new Error(getSmtpConfigError());
@@ -393,9 +561,30 @@ const CampaignWizard = () => {
       }
 
       // Persist edited template
-      const blocksToSave = editorDoc;
-      const html = blocksToSave ? renderDocumentHtml(blocksToSave) : selectedTemplate.html_body;
-      const plain = blocksToSave ? renderDocumentPlain(blocksToSave) : selectedTemplate.body;
+      let html = selectedTemplate.html_body;
+      let plain = selectedTemplate.body;
+      let templateFormat = selectedTemplate.template_format;
+      let blocksPayload: TemplateDocument | null = null;
+      let designPayload: VisualTemplateConfig | null = null;
+
+      if (designConfig) {
+        const visualContent = buildVisualTemplateContent(designConfig);
+        html = visualContent.htmlBody;
+        plain = visualContent.body;
+        templateFormat = "visual";
+        designPayload = designConfig;
+        blocksPayload = null;
+      } else if (editorDoc) {
+        html = renderDocumentHtml(editorDoc);
+        plain = renderDocumentPlain(editorDoc);
+        templateFormat = "blocks";
+        blocksPayload = editorDoc;
+        designPayload = null;
+      } else if (plainBody) {
+        plain = plainBody;
+        html = null;
+        templateFormat = "plain";
+      }
 
       await supabase
         .from("email_templates")
@@ -403,8 +592,9 @@ const CampaignWizard = () => {
           subject,
           body: plain,
           html_body: html,
-          blocks: blocksToSave as any,
-          template_format: blocksToSave ? "blocks" : selectedTemplate.template_format,
+          blocks: blocksPayload as any,
+          design_config: designPayload as any,
+          template_format: templateFormat,
         })
         .eq("id", selectedTemplate.id);
 
@@ -489,99 +679,209 @@ const CampaignWizard = () => {
 
   /* ----------------- Step nav ----------------- */
   const canContinue = () => {
-    if (step === 1) return !!selectedTemplate;
-    if (step === 2) return recipientIds.length > 0;
-    if (step === 3) return !!trimmedCampaignName && !isCampaignNameDuplicate && !!subject && !!senderEmail;
-    if (step === 4) return sendMode === "now" || !!scheduleDate;
+    if (step === 1) return false;
+    if (step === 2) return !!senderName.trim() && !!senderEmail.trim() && senderEmail.includes("@");
+    if (step === 3) return !!subject.trim();
+    if (step === 4) return recipientIds.length > 0;
+    if (step === 5) return sendMode === "now" || !!scheduleDate;
     return false;
   };
 
   const next = () => {
     if (!canContinue()) return;
-    if (step < 4) setStep(step + 1);
+    if (step < TOTAL_STEPS) setStep(step + 1);
     else sendCampaign.mutate();
   };
 
-  const previewWidthClass = previewDevice === "mobile" ? "max-w-[380px]" : "max-w-[680px]";
+  const stepContentWidth =
+    step === 1 && !editing
+      ? "max-w-6xl"
+      : step === 1 && editing
+        ? "max-w-3xl"
+        : step === 2
+          ? "max-w-xl"
+          : step === 3
+            ? "max-w-4xl"
+            : step === 4
+              ? "max-w-4xl"
+              : "max-w-3xl";
+
+  const wizardFooter = step > 1 && (
+    <div className="mt-4 flex items-center justify-between gap-3 border-t border-border pt-4">
+      <Button
+        variant="ghost"
+        disabled={step === 1}
+        onClick={() => {
+          if (step === 2 && selectedTemplate) {
+            setEditing(true);
+          }
+          setStep(step - 1);
+        }}
+      >
+        <ArrowLeft className="mr-2 h-4 w-4" /> Back
+      </Button>
+      <div className="text-sm text-muted-foreground">
+        Step {step} of {TOTAL_STEPS}
+      </div>
+      <Button onClick={next} disabled={!canContinue() || sendCampaign.isPending} className="rounded-full">
+        {step < TOTAL_STEPS ? (
+          <>
+            Continue <ArrowRight className="ml-2 h-4 w-4" />
+          </>
+        ) : sendCampaign.isPending ? (
+          "Sending..."
+        ) : sendMode === "now" ? (
+          <>
+            <Send className="mr-2 h-4 w-4" /> Send now
+          </>
+        ) : (
+          <>
+            <Clock className="mr-2 h-4 w-4" /> Schedule
+          </>
+        )}
+      </Button>
+    </div>
+  );
 
   /* ----------------- Render ----------------- */
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between gap-3">
+    <div className="mx-auto flex w-full max-w-6xl flex-col px-4 pt-4 pb-2 sm:px-6 sm:pt-5 sm:pb-3">
+      <div className="mb-6 flex items-center justify-between gap-3">
         <Button variant="ghost" size="sm" onClick={() => navigate("/campaigns")}>
           <ArrowLeft className="mr-2 h-4 w-4" /> Exit
         </Button>
-        <div className="flex-1 px-4">
+        <div className="min-w-0 flex-1 px-2 sm:px-4">
           <StepIndicator current={step} steps={STEPS} onJump={setStep} />
         </div>
-        <div className="w-[80px]" />
+        <div className="hidden w-[72px] shrink-0 sm:block" aria-hidden />
       </div>
 
-      <div className="relative min-h-[60vh]">
+      <div className={cn("relative mx-auto w-full", stepContentWidth)}>
         <AnimatePresence mode="wait">
           <motion.div
-            key={step}
-            initial={{ opacity: 0, x: 24 }}
+            key={editing ? "edit" : step}
+            initial={{ opacity: 0, x: 16 }}
             animate={{ opacity: 1, x: 0 }}
-            exit={{ opacity: 0, x: -24 }}
-            transition={{ duration: 0.25 }}
+            exit={{ opacity: 0, x: -16 }}
+            transition={{ duration: 0.2 }}
           >
             {step === 1 && !editing && (
               <Step1Picker
-                templates={templates}
+                presets={presetStarters}
+                savedTemplates={savedEmailTemplates}
                 loading={tLoad}
-                selectedId={selectedTemplate?.id || null}
-                onPick={pickAndContinue}
+                selectedTemplate={selectedTemplate}
+                pickingPresetId={pickingPresetId}
+                onPick={pickTemplate}
+                onPickPreset={pickPreset}
                 onEdit={startEditing}
               />
             )}
 
-            {step === 1 && editing && editorDoc && (
+            {step === 1 && editing && selectedTemplate && (
               <div className="space-y-4">
-                <div className="flex items-center justify-between">
+                <div className="flex flex-wrap items-start justify-between gap-3">
                   <div>
                     <h2 className="font-display text-xl font-bold text-foreground">
-                      Editing: {selectedTemplate?.name}
+                      Customize template
                     </h2>
                     <p className="text-sm text-muted-foreground">
-                      Drag blocks to reorder, click any element to edit.
+                      {editorFormat === "visual"
+                        ? "Double-click a section to edit · drag to reorder"
+                        : editorFormat === "blocks"
+                          ? "Double-click a block to edit · drag to reorder"
+                          : "Edit your email body below"}
                     </p>
                   </div>
                   <div className="flex items-center gap-2">
-                    <div className="flex rounded-full border border-border bg-muted/40 p-1">
-                      <button
-                        onClick={() => setPreviewDevice("desktop")}
-                        className={cn(
-                          "flex h-7 items-center gap-1.5 rounded-full px-3 text-xs font-medium",
-                          previewDevice === "desktop" ? "bg-background shadow-sm" : "text-muted-foreground",
-                        )}
-                      >
-                        <Monitor className="h-3.5 w-3.5" /> Desktop
-                      </button>
-                      <button
-                        onClick={() => setPreviewDevice("mobile")}
-                        className={cn(
-                          "flex h-7 items-center gap-1.5 rounded-full px-3 text-xs font-medium",
-                          previewDevice === "mobile" ? "bg-background shadow-sm" : "text-muted-foreground",
-                        )}
-                      >
-                        <Smartphone className="h-3.5 w-3.5" /> Mobile
-                      </button>
-                    </div>
+                    <Badge variant="secondary" className="gap-1">
+                      <LayoutTemplate className="h-3.5 w-3.5" />
+                      {editorFormat === "visual" ? "Visual editor" : editorFormat === "blocks" ? "Block editor" : "Plain"}
+                    </Badge>
                     <Button variant="outline" size="sm" onClick={() => setEditing(false)}>
                       Back to gallery
                     </Button>
                   </div>
                 </div>
 
-                <div className={cn("mx-auto w-full transition-all", previewDevice === "mobile" ? "max-w-[420px]" : "max-w-none")}>
-                  <BlockEditor doc={editorDoc} onChange={setEditorDoc} />
+                <div className="rounded-2xl border border-border bg-card p-4 shadow-sm sm:p-6">
+                  {editorFormat === "visual" && designConfig && (
+                    <div className="space-y-4">
+                      <div className="grid gap-3 rounded-xl border border-border bg-muted/20 p-3 sm:grid-cols-2">
+                        <div className="space-y-2">
+                          <Label className="text-xs">Preview as (first name)</Label>
+                          <Input
+                            value={previewVariables.FirstName}
+                            onChange={(e) =>
+                              setPreviewVariables((prev) => ({ ...prev, FirstName: e.target.value }))
+                            }
+                            placeholder="Ava"
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label className="text-xs">Preview company</Label>
+                          <Input
+                            value={previewVariables.CompanyName}
+                            onChange={(e) =>
+                              setPreviewVariables((prev) => ({ ...prev, CompanyName: e.target.value }))
+                            }
+                            placeholder="Northstar"
+                          />
+                        </div>
+                      </div>
+                      <VisualTemplateCanvas
+                        config={designConfig}
+                        variables={previewVariables}
+                        onConfigChange={replaceVisualConfig}
+                        onUpdateField={updateVisualConfig}
+                      />
+                    </div>
+                  )}
+
+                  {editorFormat === "blocks" && editorDoc && (
+                    <BlockEditor doc={editorDoc} onChange={updateBlocksDoc} layout="compact" />
+                  )}
+
+                  {editorFormat === "plain" && (
+                    <div className="space-y-2">
+                      <Label>Email body</Label>
+                      <Textarea
+                        value={plainBody}
+                        onChange={(e) => setPlainBody(e.target.value)}
+                        rows={14}
+                        placeholder="Hi {{FirstName}},"
+                        className="font-mono text-sm"
+                      />
+                    </div>
+                  )}
                 </div>
               </div>
             )}
 
             {step === 2 && (
-              <Step2Audience
+              <Step2From
+                senderName={senderName}
+                onSenderName={setSenderName}
+                senderEmail={senderEmail}
+                onSenderEmail={setSenderEmail}
+              />
+            )}
+
+            {step === 3 && (
+              <Step3Subject
+                subject={subject}
+                onSubject={setSubject}
+                previewText={previewText}
+                onPreviewText={setPreviewText}
+                senderName={senderName}
+                senderEmail={senderEmail}
+                renderedHtml={renderedHtml}
+                renderedBody={renderedPlain}
+              />
+            )}
+
+            {step === 4 && (
+              <Step4Audience
                 folders={folders}
                 folderMembers={folderMembers}
                 contacts={contacts}
@@ -611,26 +911,8 @@ const CampaignWizard = () => {
               />
             )}
 
-            {step === 3 && (
-              <Step3Details
-                campaignName={campaignName}
-                onCampaignName={setCampaignName}
-                isCampaignNameDuplicate={isCampaignNameDuplicate}
-                subject={subject}
-                onSubject={setSubject}
-                previewText={previewText}
-                onPreviewText={setPreviewText}
-                senderName={senderName}
-                onSenderName={setSenderName}
-                senderEmail={senderEmail}
-                onSenderEmail={setSenderEmail}
-                renderedHtml={renderedHtml}
-                renderedBody={renderedPlain}
-              />
-            )}
-
-            {step === 4 && (
-              <Step4Schedule
+            {step === 5 && (
+              <Step5Schedule
                 sendMode={sendMode}
                 onSendMode={setSendMode}
                 scheduleDate={scheduleDate}
@@ -643,44 +925,20 @@ const CampaignWizard = () => {
                   templateName: selectedTemplate?.name || "—",
                   recipients: recipientIds.length,
                   subject,
-                  campaignName,
+                  campaignName: resolveCampaignName(),
+                  senderName,
+                  senderEmail,
                 }}
               />
             )}
           </motion.div>
         </AnimatePresence>
+
+        {wizardFooter}
       </div>
 
-      {!(step === 1 && editing) && (
-        <div className="sticky bottom-0 -mx-4 flex items-center justify-between gap-3 border-t border-border bg-background/95 px-4 py-4 backdrop-blur sm:-mx-6 sm:px-6">
-          <Button variant="ghost" disabled={step === 1} onClick={() => setStep(step - 1)}>
-            <ArrowLeft className="mr-2 h-4 w-4" /> Back
-          </Button>
-          <div className="text-sm text-muted-foreground">
-            Step {step} of {STEPS.length}
-          </div>
-          <Button onClick={next} disabled={!canContinue() || sendCampaign.isPending} className="rounded-full">
-            {step < 4 ? (
-              <>
-                Continue <ArrowRight className="ml-2 h-4 w-4" />
-              </>
-            ) : sendCampaign.isPending ? (
-              "Sending..."
-            ) : sendMode === "now" ? (
-              <>
-                <Send className="mr-2 h-4 w-4" /> Send now
-              </>
-            ) : (
-              <>
-                <Clock className="mr-2 h-4 w-4" /> Schedule
-              </>
-            )}
-          </Button>
-        </div>
-      )}
-
-      {step === 1 && editing && (
-        <div className="sticky bottom-0 -mx-4 flex items-center justify-end gap-3 border-t border-border bg-background/95 px-4 py-4 backdrop-blur sm:-mx-6 sm:px-6">
+      {step === 1 && editing && selectedTemplate && (
+        <div className="mx-auto mt-6 flex w-full max-w-3xl items-center justify-end gap-3 border-t border-border pt-4">
           <Button variant="ghost" onClick={() => setEditing(false)}>Discard edits</Button>
           <Button
             onClick={() => {
@@ -697,7 +955,7 @@ const CampaignWizard = () => {
       <SuccessModal
         open={successOpen}
         onClose={() => setSuccessOpen(false)}
-        campaignName={campaignName}
+        campaignName={resolveCampaignName()}
         recipients={successMeta.recipients}
         scheduledAt={successMeta.scheduledAt}
         onViewAnalytics={() => createdCampaignId && navigate(`/campaigns/${createdCampaignId}/report`)}
@@ -855,84 +1113,316 @@ const CampaignWizard = () => {
 };
 
 /* =================== STEP 1 =================== */
-const Step1Picker = ({
-  templates, loading, selectedId, onPick, onEdit,
+const TemplateCard = ({
+  title,
+  subject,
+  html,
+  body,
+  selected,
+  busy,
+  onEdit,
+  onChoose,
 }: {
-  templates: EmailRow[]; loading: boolean; selectedId: string | null;
-  onPick: (t: EmailRow) => void; onEdit: (t: EmailRow) => void;
+  title: string;
+  subject: string;
+  html: string | null;
+  body: string;
+  selected: boolean;
+  busy?: boolean;
+  onEdit?: () => void;
+  onChoose: () => void;
 }) => (
-  <div className="space-y-6">
-    <div>
-      <h2 className="font-display text-2xl font-bold text-foreground">Choose your template</h2>
-      <p className="mt-1 text-sm text-muted-foreground">
-        Pick a starting point. You can fully customize before sending.
-      </p>
-    </div>
-
-    {loading ? (
-      <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-        {[1, 2, 3, 4, 5, 6].map((i) => (
-          <Skeleton key={i} className="h-[420px] w-full rounded-2xl" />
-        ))}
-      </div>
-    ) : templates.length === 0 ? (
-      <Card className="p-12 text-center">
-        <p className="text-muted-foreground">
-          No templates yet. Create one in the Emails section first.
-        </p>
-      </Card>
-    ) : (
-      <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-        {templates.map((t, i) => {
-          const selected = selectedId === t.id;
-          return (
-            <motion.div
-              key={t.id}
-              initial={{ opacity: 0, y: 12 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: i * 0.04 }}
-              className={cn(
-                "group overflow-hidden rounded-2xl border bg-card shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-lg",
-                selected ? "border-primary ring-2 ring-primary/30" : "border-border",
-              )}
-            >
-              <div className="relative h-56 overflow-hidden bg-muted/30">
-                <TemplatePreview
-                  html={t.html_body} body={t.body} scaled
-                  className="h-full w-full !rounded-none border-0"
-                />
-                {selected && (
-                  <div className="absolute right-3 top-3 flex h-8 w-8 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-md">
-                    <Check className="h-4 w-4" />
-                  </div>
-                )}
-              </div>
-              <div className="space-y-3 p-5">
-                <div>
-                  <h3 className="truncate font-display text-base font-semibold text-foreground">{t.name}</h3>
-                  <p className="mt-0.5 truncate text-xs text-muted-foreground">
-                    {replaceTemplateVariables(t.subject)}
-                  </p>
-                </div>
-                <div className="flex gap-2">
-                  <Button onClick={() => onEdit(t)} variant="outline" size="sm" className="flex-1 rounded-full">
-                    <Edit3 className="mr-1.5 h-3.5 w-3.5" /> Edit
-                  </Button>
-                  <Button onClick={() => onPick(t)} size="sm" className="flex-1 rounded-full">
-                    Use this
-                  </Button>
-                </div>
-              </div>
-            </motion.div>
-          );
-        })}
-      </div>
+  <div
+    className={cn(
+      "group overflow-hidden rounded-2xl border bg-card shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-lg",
+      selected ? "border-primary ring-2 ring-primary/30" : "border-border",
     )}
+  >
+    <div className="relative h-56 overflow-hidden bg-muted/30">
+      <TemplatePreview html={html} body={body} scaled className="h-full w-full !rounded-none border-0" />
+      {selected && (
+        <div className="absolute right-3 top-3 flex h-8 w-8 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-md">
+          <Check className="h-4 w-4" />
+        </div>
+      )}
+    </div>
+    <div className="space-y-3 p-5">
+      <div>
+        <h3 className="truncate font-display text-base font-semibold text-foreground">{title}</h3>
+        <p className="mt-0.5 truncate text-xs text-muted-foreground">{replaceTemplateVariables(subject)}</p>
+      </div>
+      <div className="flex gap-2">
+        {onEdit && (
+          <Button onClick={onEdit} variant="outline" size="sm" className="flex-1 rounded-full" disabled={busy}>
+            <Edit3 className="mr-1.5 h-3.5 w-3.5" /> Edit
+          </Button>
+        )}
+        <Button onClick={onChoose} size="sm" className="flex-1 rounded-full" disabled={busy}>
+          {busy ? "Loading..." : "Choose & edit"}
+        </Button>
+      </div>
+    </div>
   </div>
 );
 
-/* =================== STEP 2 =================== */
-const Step2Audience = ({
+const Step1Picker = ({
+  presets,
+  savedTemplates,
+  loading,
+  selectedTemplate,
+  pickingPresetId,
+  onPick,
+  onPickPreset,
+  onEdit,
+}: {
+  presets: { preset: (typeof visualTemplatePresets)[number]; starter: ReturnType<typeof getStarterTemplate> }[];
+  savedTemplates: EmailRow[];
+  loading: boolean;
+  selectedTemplate: EmailRow | null;
+  pickingPresetId: VisualTemplatePresetId | null;
+  onPick: (t: EmailRow) => void;
+  onPickPreset: (id: VisualTemplatePresetId) => void;
+  onEdit: (t: EmailRow) => void;
+}) => {
+  const selectedPresetId = (selectedTemplate?.design_config as VisualTemplateConfig | null)?.presetId;
+
+  return (
+    <div className="space-y-8">
+      <div>
+        <h2 className="font-display text-2xl font-bold text-foreground">Choose your template</h2>
+        <p className="mt-1 text-sm text-muted-foreground">
+          Pick a prebuilt design or one you saved. You can customize before sending.
+        </p>
+      </div>
+
+      <div className="space-y-4">
+        <div className="flex items-center gap-2">
+          <Sparkles className="h-4 w-4 text-primary" />
+          <h3 className="font-display text-lg font-semibold text-foreground">Prebuilt designs</h3>
+        </div>
+        {loading ? (
+          <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+            {[1, 2, 3].map((i) => (
+              <Skeleton key={i} className="h-[420px] w-full rounded-2xl" />
+            ))}
+          </div>
+        ) : (
+          <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+            {presets.map(({ preset, starter }, i) => {
+              const selected = selectedPresetId === preset.id;
+              const busy = pickingPresetId === preset.id;
+              return (
+                <motion.div
+                  key={preset.id}
+                  initial={{ opacity: 0, y: 12 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: i * 0.04 }}
+                >
+                  <TemplateCard
+                    title={preset.name}
+                    subject={starter.subject}
+                    html={starter.html_body}
+                    body={starter.body}
+                    selected={selected}
+                    busy={busy}
+                    onChoose={() => onPickPreset(preset.id)}
+                  />
+                </motion.div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+
+      {!loading && savedTemplates.length > 0 && (
+        <div className="space-y-4">
+          <h3 className="font-display text-lg font-semibold text-foreground">Your saved emails</h3>
+          <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+            {savedTemplates.map((t, i) => (
+              <motion.div
+                key={t.id}
+                initial={{ opacity: 0, y: 12 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: i * 0.04 }}
+              >
+                <TemplateCard
+                  title={t.name}
+                  subject={t.subject}
+                  html={t.html_body}
+                  body={t.body}
+                  selected={selectedTemplate?.id === t.id}
+                  onEdit={() => onEdit(t)}
+                  onChoose={() => onPick(t)}
+                />
+              </motion.div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {!loading && savedTemplates.length === 0 && (
+        <p className="text-center text-sm text-muted-foreground">
+          Custom templates you create under Emails will appear here too.
+        </p>
+      )}
+    </div>
+  );
+};
+
+/* =================== STEP 2 — FROM =================== */
+const Step2From = ({
+  senderName,
+  onSenderName,
+  senderEmail,
+  onSenderEmail,
+}: {
+  senderName: string;
+  onSenderName: (v: string) => void;
+  senderEmail: string;
+  onSenderEmail: (v: string) => void;
+}) => (
+  <div className="space-y-5">
+    <div className="space-y-1">
+      <h2 className="font-display text-2xl font-bold text-foreground">Who is this email from?</h2>
+      <p className="text-sm text-muted-foreground">
+        Recipients will see this name and address in their inbox.
+      </p>
+    </div>
+    <Card className="space-y-5 p-5 sm:p-6">
+      <div className="space-y-2">
+        <Label>Sender name</Label>
+        <Input
+          value={senderName}
+          onChange={(e) => onSenderName(e.target.value)}
+          placeholder="Ava Studio"
+          autoFocus
+        />
+      </div>
+      <div className="space-y-2">
+        <Label>Sender email</Label>
+        <Input
+          type="email"
+          value={senderEmail}
+          onChange={(e) => onSenderEmail(e.target.value)}
+          placeholder="hello@yourcompany.com"
+        />
+        <p className="text-xs text-muted-foreground">
+          Must match your connected sending account in Settings.
+        </p>
+      </div>
+    </Card>
+  </div>
+);
+
+/* =================== STEP 3 — SUBJECT =================== */
+const Step3Subject = ({
+  subject,
+  onSubject,
+  previewText,
+  onPreviewText,
+  senderName,
+  senderEmail,
+  renderedHtml,
+  renderedBody,
+}: {
+  subject: string;
+  onSubject: (v: string) => void;
+  previewText: string;
+  onPreviewText: (v: string) => void;
+  senderName: string;
+  senderEmail: string;
+  renderedHtml: string;
+  renderedBody: string;
+}) => {
+  const aiSubject = useMutation({
+    mutationFn: async () => {
+      const { data, error } = await supabase.functions.invoke("ai-email-writer", {
+        body: {
+          prompt: `Suggest a short, catchy email subject line for: ${subject || "marketing email"}`,
+          type: "subject",
+        },
+      });
+      if (error) throw error;
+      return (data as { subject?: string; content?: string })?.subject || (data as { content?: string })?.content || "";
+    },
+    onSuccess: (s: string) => {
+      if (s) onSubject(s.slice(0, 120));
+    },
+    onError: () => toast.error("AI suggestion failed"),
+  });
+
+  return (
+    <div className="space-y-5">
+      <div className="space-y-1">
+        <h2 className="font-display text-2xl font-bold text-foreground">What&apos;s your subject line?</h2>
+        <p className="text-sm text-muted-foreground">
+          This is the first thing people see in their inbox.
+        </p>
+      </div>
+
+      <Card className="space-y-5 p-5 sm:p-6">
+        <div className="space-y-2">
+          <div className="flex items-center justify-between gap-2">
+            <Label>Subject line</Label>
+            <Button
+              size="sm"
+              variant="ghost"
+              className="h-7 shrink-0 px-2 text-xs"
+              disabled={aiSubject.isPending}
+              onClick={() => aiSubject.mutate()}
+            >
+              <Sparkles className="mr-1 h-3 w-3" />
+              {aiSubject.isPending ? "Thinking..." : "AI suggest"}
+            </Button>
+          </div>
+          <Input
+            value={subject}
+            onChange={(e) => onSubject(e.target.value)}
+            placeholder="{{FirstName}}, your free guide is ready"
+            autoFocus
+          />
+          <p className="text-xs text-muted-foreground">{subject.length}/100 characters</p>
+        </div>
+
+        <div className="space-y-2">
+          <Label>Preview text <span className="font-normal text-muted-foreground">(optional)</span></Label>
+          <Textarea
+            value={previewText}
+            onChange={(e) => onPreviewText(e.target.value)}
+            rows={2}
+            placeholder="Short teaser shown under the subject in the inbox"
+          />
+        </div>
+      </Card>
+
+      <Card className="overflow-hidden">
+        <div className="border-b border-border bg-muted/30 p-4">
+          <p className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">Inbox preview</p>
+          <p className="mt-2 text-sm font-semibold text-foreground">
+            {senderName || "Sender"}{" "}
+            <span className="font-normal text-muted-foreground">
+              &lt;{senderEmail || "you@example.com"}&gt;
+            </span>
+          </p>
+          <p className="mt-1 truncate text-base font-bold text-foreground">
+            {subject || "Your subject line"}
+          </p>
+          {previewText && <p className="mt-1 truncate text-xs text-muted-foreground">{previewText}</p>}
+        </div>
+        <div className="max-h-[280px] overflow-y-auto bg-white">
+          {renderedHtml ? (
+            <div dangerouslySetInnerHTML={{ __html: replaceTemplateVariables(renderedHtml) }} />
+          ) : (
+            <div className="whitespace-pre-wrap p-6 text-sm text-muted-foreground">{renderedBody}</div>
+          )}
+        </div>
+      </Card>
+    </div>
+  );
+};
+
+/* =================== STEP 4 — AUDIENCE =================== */
+const Step4Audience = ({
   folders, folderMembers, contacts,
   selectedFolderIds, selectedContactIds,
   onToggleFolder, onToggleContact, onSelectAllVisible, onClearAll,
@@ -961,18 +1451,18 @@ const Step2Audience = ({
   );
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div>
+    <div className="space-y-5">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div className="space-y-1">
           <h2 className="font-display text-2xl font-bold text-foreground">Who do you want to send to?</h2>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Pick lists or individual contacts.
+          <p className="text-sm text-muted-foreground">
+            Pick lists, contacts, or import a CSV file.
           </p>
         </div>
         <motion.div
           initial={false}
           animate={{ scale: recipientCount > 0 ? 1 : 0.95 }}
-          className="flex items-center gap-2 rounded-full border border-primary/30 bg-primary/10 px-4 py-2"
+          className="flex shrink-0 items-center gap-2 rounded-full border border-primary/30 bg-primary/10 px-4 py-2"
         >
           <Users className="h-4 w-4 text-primary" />
           <span className="text-sm font-semibold text-primary">
@@ -981,6 +1471,7 @@ const Step2Audience = ({
         </motion.div>
       </div>
 
+      <Card className="p-4 sm:p-5">
       <Tabs value={tab} onValueChange={(v) => onTabChange(v as any)}>
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <TabsList className="rounded-full bg-muted/60 p-1">
@@ -1059,7 +1550,7 @@ const Step2Audience = ({
                 Select all visible
               </Button>
             </div>
-            <div className="max-h-[480px] divide-y divide-border overflow-y-auto">
+            <div className="max-h-[min(360px,50vh)] divide-y divide-border overflow-y-auto">
               {filteredContacts.map((c) => {
                 const selected = selectedContactIds.has(c.id);
                 return (
@@ -1092,124 +1583,13 @@ const Step2Audience = ({
           </Card>
         </TabsContent>
       </Tabs>
+      </Card>
     </div>
   );
 };
 
-/* =================== STEP 3 =================== */
-const Step3Details = ({
-  campaignName, onCampaignName, isCampaignNameDuplicate, subject, onSubject, previewText, onPreviewText,
-  senderName, onSenderName, senderEmail, onSenderEmail, renderedHtml, renderedBody,
-}: {
-  campaignName: string; onCampaignName: (v: string) => void;
-  isCampaignNameDuplicate?: boolean;
-  subject: string; onSubject: (v: string) => void;
-  previewText: string; onPreviewText: (v: string) => void;
-  senderName: string; onSenderName: (v: string) => void;
-  senderEmail: string; onSenderEmail: (v: string) => void;
-  renderedHtml: string; renderedBody: string;
-}) => {
-  const aiSubject = useMutation({
-    mutationFn: async () => {
-      const { data, error } = await supabase.functions.invoke("ai-email-writer", {
-        body: { prompt: `Suggest a short, catchy email subject line for: ${campaignName || subject || "marketing email"}`, type: "subject" },
-      });
-      if (error) throw error;
-      return (data as any)?.subject || (data as any)?.content || "";
-    },
-    onSuccess: (s: string) => { if (s) onSubject(s.slice(0, 120)); },
-    onError: () => toast.error("AI suggestion failed"),
-  });
-
-  return (
-    <div className="space-y-6">
-      <div>
-        <h2 className="font-display text-2xl font-bold text-foreground">Email details</h2>
-        <p className="mt-1 text-sm text-muted-foreground">Set how this email appears in the inbox.</p>
-      </div>
-
-      <div className="grid gap-6 lg:grid-cols-[1fr_1fr]">
-        <div className="space-y-5">
-          <div className="space-y-2">
-            <Label>Workflow name (internal)</Label>
-            <Input
-              value={campaignName}
-              onChange={(e) => onCampaignName(e.target.value)}
-              placeholder="May Newsletter"
-              className={isCampaignNameDuplicate ? "border-destructive" : undefined}
-            />
-            {isCampaignNameDuplicate && (
-              <p className="text-xs text-destructive">
-                {campaignNameDuplicateMessage(campaignName)}
-              </p>
-            )}
-            <p className="text-xs text-muted-foreground">Each workflow must have a unique name.</p>
-          </div>
-
-          <div className="space-y-2">
-            <div className="flex items-center justify-between">
-              <Label>Subject line</Label>
-              <Button
-                size="sm" variant="ghost" className="h-7 px-2 text-xs"
-                disabled={aiSubject.isPending} onClick={() => aiSubject.mutate()}
-              >
-                <Sparkles className="mr-1 h-3 w-3" />
-                {aiSubject.isPending ? "Thinking..." : "AI suggest"}
-              </Button>
-            </div>
-            <Input value={subject} onChange={(e) => onSubject(e.target.value)} placeholder="Don't miss our spring sale" />
-            <p className="text-xs text-muted-foreground">{subject.length}/100</p>
-          </div>
-
-          <div className="space-y-2">
-            <Label>Preview text</Label>
-            <Textarea
-              value={previewText} onChange={(e) => onPreviewText(e.target.value)}
-              rows={2} placeholder="The teaser shown after the subject in inbox"
-            />
-          </div>
-
-          <div className="grid gap-4 sm:grid-cols-2">
-            <div className="space-y-2">
-              <Label>Sender name</Label>
-              <Input value={senderName} onChange={(e) => onSenderName(e.target.value)} placeholder="Acme Co" />
-            </div>
-            <div className="space-y-2">
-              <Label>Sender email</Label>
-              <Input
-                type="email" value={senderEmail} onChange={(e) => onSenderEmail(e.target.value)}
-                placeholder="hello@acme.co"
-              />
-            </div>
-          </div>
-        </div>
-
-        <Card className="overflow-hidden">
-          <div className="border-b border-border bg-muted/30 p-4">
-            <p className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">Inbox preview</p>
-            <p className="mt-2 text-sm font-semibold text-foreground">
-              {senderName || "Sender"} <span className="font-normal text-muted-foreground">&lt;{senderEmail || "you@example.com"}&gt;</span>
-            </p>
-            <p className="mt-1 truncate text-base font-bold text-foreground">
-              {subject || "Your subject line"}
-            </p>
-            {previewText && <p className="mt-1 truncate text-xs text-muted-foreground">{previewText}</p>}
-          </div>
-          <div className="max-h-[420px] overflow-y-auto bg-white">
-            {renderedHtml ? (
-              <div dangerouslySetInnerHTML={{ __html: replaceTemplateVariables(renderedHtml) }} />
-            ) : (
-              <div className="p-6 text-sm text-muted-foreground whitespace-pre-wrap">{renderedBody}</div>
-            )}
-          </div>
-        </Card>
-      </div>
-    </div>
-  );
-};
-
-/* =================== STEP 4 =================== */
-const Step4Schedule = ({
+/* =================== STEP 5 — SEND =================== */
+const Step5Schedule = ({
   sendMode, onSendMode, scheduleDate, onScheduleDate, scheduleTime, onScheduleTime,
   timezone, onTimezone, summary,
 }: {
@@ -1217,12 +1597,19 @@ const Step4Schedule = ({
   scheduleDate: Date | undefined; onScheduleDate: (d: Date | undefined) => void;
   scheduleTime: string; onScheduleTime: (t: string) => void;
   timezone: string; onTimezone: (t: string) => void;
-  summary: { templateName: string; recipients: number; subject: string; campaignName: string };
+  summary: {
+    templateName: string;
+    recipients: number;
+    subject: string;
+    campaignName: string;
+    senderName: string;
+    senderEmail: string;
+  };
 }) => (
-  <div className="space-y-6">
-    <div>
+  <div className="space-y-5">
+    <div className="space-y-1">
       <h2 className="font-display text-2xl font-bold text-foreground">When should we send?</h2>
-      <p className="mt-1 text-sm text-muted-foreground">Send right away or pick a future time.</p>
+      <p className="text-sm text-muted-foreground">Send right away or pick a future time.</p>
     </div>
 
     <div className="grid gap-4 sm:grid-cols-2">
@@ -1292,6 +1679,7 @@ const Step4Schedule = ({
       <div className="space-y-3 text-sm">
         <SummaryRow label="Campaign" value={summary.campaignName || "—"} />
         <SummaryRow label="Template" value={summary.templateName} />
+        <SummaryRow label="From" value={`${summary.senderName} <${summary.senderEmail}>`} />
         <SummaryRow label="Subject" value={summary.subject || "—"} />
         <SummaryRow label="Recipients" value={`${summary.recipients.toLocaleString()} contact${summary.recipients === 1 ? "" : "s"}`} />
         <SummaryRow

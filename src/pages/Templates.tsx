@@ -18,6 +18,8 @@ import { toast } from "sonner";
 import AIEmailWriter from "@/components/AIEmailWriter";
 import TemplatePreview from "@/components/TemplatePreview";
 import BlockEditor from "@/components/BlockEditor";
+import VisualTemplateCanvas from "@/components/VisualTemplateCanvas";
+import { DEFAULT_VISUAL_SECTION_ORDER } from "@/lib/visual-template-sections";
 import {
   buildVisualTemplateContent,
   getStarterTemplate,
@@ -282,18 +284,41 @@ const Templates = () => {
       template_format: "visual",
       body: starter.body,
       html_body: starter.html_body,
-      design_config: starter.design_config,
+      design_config: {
+        ...(starter.design_config as VisualTemplateConfig),
+        sectionOrder: DEFAULT_VISUAL_SECTION_ORDER,
+      },
       blocks: null,
+    }));
+  };
+
+  const replaceVisualConfig = (nextConfig: VisualTemplateConfig) => {
+    const visualContent = buildVisualTemplateContent(nextConfig);
+    setForm((prev) => ({
+      ...prev,
+      template_format: "visual",
+      design_config: nextConfig,
+      body: visualContent.body,
+      html_body: visualContent.htmlBody,
     }));
   };
 
   const updateVisualConfig = <K extends keyof VisualTemplateConfig>(key: K, value: VisualTemplateConfig[K]) => {
     setForm((prev) => {
-      const currentConfig = prev.design_config || (getStarterTemplate("lead-magnet").design_config as VisualTemplateConfig);
+      const currentConfig =
+        prev.design_config || (getStarterTemplate("lead-magnet").design_config as VisualTemplateConfig);
       const nextConfig = { ...currentConfig, [key]: value } as VisualTemplateConfig;
 
-      if (key === "brandName" && typeof value === "string" && currentConfig.footerNote.includes(currentConfig.brandName)) {
+      if (
+        key === "brandName" &&
+        typeof value === "string" &&
+        currentConfig.footerNote.includes(currentConfig.brandName)
+      ) {
         nextConfig.footerNote = currentConfig.footerNote.split(currentConfig.brandName).join(value);
+      }
+
+      if (!nextConfig.sectionOrder?.length) {
+        nextConfig.sectionOrder = DEFAULT_VISUAL_SECTION_ORDER;
       }
 
       const visualContent = buildVisualTemplateContent(nextConfig);
@@ -350,10 +375,10 @@ const Templates = () => {
     }));
   };
 
+  const isCanvasEditor = form.template_format === "visual" || form.template_format === "blocks";
+
   const renderEditor = (onSubmit: () => void, submitLabel: string, isPending: boolean) => (
-    <div
-      className={`grid gap-6 ${form.template_format === "blocks" ? "xl:grid-cols-[minmax(0,1.75fr)_380px]" : "lg:grid-cols-[1.1fr_0.9fr]"}`}
-    >
+    <div className={isCanvasEditor ? "space-y-5" : "grid gap-6 lg:grid-cols-[1.1fr_0.9fr]"}>
       <div className="space-y-5">
         <div className="grid gap-4 sm:grid-cols-2">
           <div className="space-y-2">
@@ -402,7 +427,7 @@ const Templates = () => {
 
           <TabsContent value="blocks" className="space-y-4">
             {form.blocks ? (
-              <BlockEditor doc={form.blocks} onChange={updateBlocksDoc} />
+              <BlockEditor doc={form.blocks} onChange={updateBlocksDoc} layout="compact" />
             ) : (
               <div className="rounded-xl border border-dashed border-border p-8 text-center text-sm text-muted-foreground">
                 Loading block editor...
@@ -441,25 +466,14 @@ const Templates = () => {
           </TabsContent>
 
           <TabsContent value="visual" className="space-y-4">
-            <div className="rounded-xl border border-border bg-muted/30 p-4">
-              <div className="mb-3 flex items-center justify-between gap-3">
-                <div>
-                  <p className="text-sm font-medium text-foreground">Visual layout</p>
-                  <p className="text-xs text-muted-foreground">Choose a prebuilt design, then edit the content below.</p>
-                </div>
-                <Badge variant="secondary" className="gap-1">
-                  <LayoutTemplate className="h-3.5 w-3.5" />
-                  HTML + text fallback
-                </Badge>
-              </div>
-
-              <div className="space-y-2">
-                <Label>Preset</Label>
+            <div className="flex flex-wrap items-end gap-3 rounded-xl border border-border bg-muted/20 p-3">
+              <div className="min-w-[200px] flex-1 space-y-1.5">
+                <Label className="text-xs">Template preset</Label>
                 <Select
                   value={form.design_config?.presetId || "lead-magnet"}
                   onValueChange={(value) => applyVisualPreset(value as VisualTemplatePresetId)}
                 >
-                  <SelectTrigger>
+                  <SelectTrigger className="h-9">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -471,152 +485,38 @@ const Templates = () => {
                   </SelectContent>
                 </Select>
               </div>
+              <Badge variant="secondary" className="mb-0.5 gap-1">
+                <LayoutTemplate className="h-3.5 w-3.5" />
+                Visual editor
+              </Badge>
+            </div>
+
+            <div className="grid gap-3 rounded-xl border border-border bg-muted/20 p-3 sm:grid-cols-2">
+              <div className="space-y-2">
+                <Label className="text-xs">Preview as (first name)</Label>
+                <Input
+                  value={previewVariables.FirstName}
+                  onChange={(e) => setPreviewVariables((prev) => ({ ...prev, FirstName: e.target.value }))}
+                  placeholder="Ava"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label className="text-xs">Preview company</Label>
+                <Input
+                  value={previewVariables.CompanyName}
+                  onChange={(e) => setPreviewVariables((prev) => ({ ...prev, CompanyName: e.target.value }))}
+                  placeholder="Northstar"
+                />
+              </div>
             </div>
 
             {form.design_config && (
-              <div className="grid gap-4">
-                <div className="grid gap-4 sm:grid-cols-2">
-                  <div className="space-y-2">
-                    <Label>Brand name</Label>
-                    <Input
-                      value={form.design_config.brandName}
-                      onChange={(e) => updateVisualConfig("brandName", e.target.value)}
-                    />
-                    <p className="text-xs text-muted-foreground">
-                      This controls the top brand label, like the current "Ava Studio" badge.
-                    </p>
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Eyebrow label</Label>
-                    <Input
-                      value={form.design_config.eyebrow}
-                      onChange={(e) => updateVisualConfig("eyebrow", e.target.value)}
-                    />
-                  </div>
-                </div>
-
-                <div className="space-y-2">
-                  <Label>Headline</Label>
-                  <Textarea
-                    value={form.design_config.headline}
-                    onChange={(e) => updateVisualConfig("headline", e.target.value)}
-                    rows={2}
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <Label>Subheadline</Label>
-                  <Textarea
-                    value={form.design_config.subheadline}
-                    onChange={(e) => updateVisualConfig("subheadline", e.target.value)}
-                    rows={2}
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <Label>Main copy</Label>
-                  <Textarea
-                    value={form.design_config.body}
-                    onChange={(e) => updateVisualConfig("body", e.target.value)}
-                    rows={5}
-                  />
-                </div>
-
-                <div className="grid gap-4 sm:grid-cols-2">
-                  <div className="space-y-2">
-                    <Label>CTA text</Label>
-                    <Input
-                      value={form.design_config.ctaText}
-                      onChange={(e) => updateVisualConfig("ctaText", e.target.value)}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label>CTA URL</Label>
-                    <Input
-                      value={form.design_config.ctaUrl}
-                      onChange={(e) => updateVisualConfig("ctaUrl", e.target.value)}
-                    />
-                  </div>
-                </div>
-
-                <div className="space-y-2">
-                  <Label>Hero image URL</Label>
-                  <Input
-                    value={form.design_config.heroImageUrl}
-                    onChange={(e) => updateVisualConfig("heroImageUrl", e.target.value)}
-                    placeholder="https://..."
-                  />
-                </div>
-
-                <div className="grid gap-4 sm:grid-cols-2">
-                  <div className="space-y-2">
-                    <Label>Supporting section title</Label>
-                    <Input
-                      value={form.design_config.secondaryTitle}
-                      onChange={(e) => updateVisualConfig("secondaryTitle", e.target.value)}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Footer note</Label>
-                    <Input
-                      value={form.design_config.footerNote}
-                      onChange={(e) => updateVisualConfig("footerNote", e.target.value)}
-                    />
-                  </div>
-                </div>
-
-                <div className="space-y-2">
-                  <Label>Supporting copy</Label>
-                  <Textarea
-                    value={form.design_config.secondaryBody}
-                    onChange={(e) => updateVisualConfig("secondaryBody", e.target.value)}
-                    rows={3}
-                  />
-                </div>
-
-                <div className="grid gap-4 sm:grid-cols-2">
-                  <div className="space-y-2">
-                    <Label>Accent color</Label>
-                    <div className="flex gap-2">
-                      <Input
-                        type="color"
-                        value={form.design_config.accentColor}
-                        onChange={(e) => updateVisualConfig("accentColor", e.target.value)}
-                        className="h-10 w-16 p-1"
-                      />
-                      <Input
-                        value={form.design_config.accentColor}
-                        onChange={(e) => updateVisualConfig("accentColor", e.target.value)}
-                      />
-                    </div>
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Background color</Label>
-                    <div className="flex gap-2">
-                      <Input
-                        type="color"
-                        value={form.design_config.backgroundColor}
-                        onChange={(e) => updateVisualConfig("backgroundColor", e.target.value)}
-                        className="h-10 w-16 p-1"
-                      />
-                      <Input
-                        value={form.design_config.backgroundColor}
-                        onChange={(e) => updateVisualConfig("backgroundColor", e.target.value)}
-                      />
-                    </div>
-                  </div>
-                </div>
-
-                <div className="rounded-xl border border-dashed border-border bg-muted/20 p-4">
-                  <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Plain text fallback</p>
-                  <p className="mt-1 text-xs text-muted-foreground">
-                    This is generated automatically for inboxes that do not render rich HTML.
-                  </p>
-                  <div className="mt-3 max-h-48 overflow-auto whitespace-pre-wrap rounded-lg bg-background p-3 text-sm text-foreground">
-                    {form.body}
-                  </div>
-                </div>
-              </div>
+              <VisualTemplateCanvas
+                config={form.design_config}
+                variables={previewVariables}
+                onConfigChange={replaceVisualConfig}
+                onUpdateField={updateVisualConfig}
+              />
             )}
           </TabsContent>
         </Tabs>
@@ -630,47 +530,50 @@ const Templates = () => {
         </Button>
       </div>
 
-      <div className="space-y-4">
-        <div>
-          <p className="text-sm font-medium text-foreground">Live preview</p>
-          <p className="text-xs text-muted-foreground">
-            Variables are previewed with sample values so you can see what the final email looks like.
-          </p>
-        </div>
-
-        <div className="grid gap-3 rounded-xl border border-border bg-muted/20 p-3 sm:grid-cols-2">
-          <div className="space-y-2">
-            <Label>Preview first name</Label>
-            <Input
-              value={previewVariables.FirstName}
-              onChange={(e) => setPreviewVariables((prev) => ({ ...prev, FirstName: e.target.value }))}
-              placeholder="Ava"
-            />
+      {!isCanvasEditor && (
+        <div className="space-y-4">
+          <div>
+            <p className="text-sm font-medium text-foreground">Live preview</p>
+            <p className="text-xs text-muted-foreground">
+              Variables are previewed with sample values so you can see what the final email looks like.
+            </p>
           </div>
-          <div className="space-y-2">
-            <Label>Preview company</Label>
-            <Input
-              value={previewVariables.CompanyName}
-              onChange={(e) => setPreviewVariables((prev) => ({ ...prev, CompanyName: e.target.value }))}
-              placeholder="Northstar"
-            />
+
+          <div className="grid gap-3 rounded-xl border border-border bg-muted/20 p-3 sm:grid-cols-2">
+            <div className="space-y-2">
+              <Label>Preview first name</Label>
+              <Input
+                value={previewVariables.FirstName}
+                onChange={(e) => setPreviewVariables((prev) => ({ ...prev, FirstName: e.target.value }))}
+                placeholder="Ava"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Preview company</Label>
+              <Input
+                value={previewVariables.CompanyName}
+                onChange={(e) => setPreviewVariables((prev) => ({ ...prev, CompanyName: e.target.value }))}
+                placeholder="Northstar"
+              />
+            </div>
           </div>
-        </div>
 
-        <div className="rounded-xl border border-border bg-muted/20 p-3">
-          <p className="mb-2 text-xs text-muted-foreground">Subject</p>
-          <p className="rounded-lg bg-background p-3 text-sm font-medium text-foreground">
-            {replaceTemplateVariables(form.subject || "Your email subject will appear here", previewVariables)}
-          </p>
-        </div>
+          <div className="rounded-xl border border-border bg-muted/20 p-3">
+            <p className="mb-2 text-xs text-muted-foreground">Subject</p>
+            <p className="rounded-lg bg-background p-3 text-sm font-medium text-foreground">
+              {replaceTemplateVariables(form.subject || "Your email subject will appear here", previewVariables)}
+            </p>
+          </div>
 
-        <TemplatePreview
-          html={form.html_body}
-          body={form.body || "Start typing to see the preview."}
-          className={`${form.template_format === "blocks" ? "min-h-[760px]" : "min-h-[540px]"}`}
-          variables={previewVariables}
-        />
-      </div>
+          <TemplatePreview
+            html={form.html_body}
+            body={form.body || "Start typing to see the preview."}
+            className="min-h-[540px]"
+            variables={previewVariables}
+          />
+        </div>
+      )}
+
     </div>
   );
 
@@ -685,12 +588,12 @@ const Templates = () => {
         </div>
         <Dialog open={createOpen} onOpenChange={setCreateOpen}>
           <DialogTrigger asChild>
-            <Button size="sm" onClick={() => setForm(createEmptyForm())}>
+            <Button size="sm" onClick={() => openCreateWithStarter("lead-magnet")}>
               <Plus className="w-4 h-4 mr-2" />
               New Template
             </Button>
           </DialogTrigger>
-          <DialogContent className="max-h-[94vh] max-w-[96vw] overflow-y-auto">
+          <DialogContent className="max-h-[90vh] max-w-3xl overflow-y-auto">
             <DialogHeader>
               <DialogTitle className="font-display">Create Template</DialogTitle>
             </DialogHeader>
@@ -796,7 +699,7 @@ const Templates = () => {
       )}
 
       <Dialog open={editOpen} onOpenChange={setEditOpen}>
-        <DialogContent className="max-h-[94vh] max-w-[96vw] overflow-y-auto">
+        <DialogContent className="max-h-[90vh] max-w-3xl overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="font-display">Edit Template</DialogTitle>
           </DialogHeader>

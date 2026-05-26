@@ -44,10 +44,13 @@ import {
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
+import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -100,10 +103,16 @@ const ALL_BLOCK_TYPES: BlockType[] = [
 type Props = {
   doc: TemplateDocument;
   onChange: (doc: TemplateDocument) => void;
+  /** Single-column canvas for narrow dialogs; double-click opens a focused edit panel */
+  layout?: "full" | "compact";
 };
 
-const BlockEditor = ({ doc, onChange }: Props) => {
+type EditTarget = BlockId | "document" | null;
+
+const BlockEditor = ({ doc, onChange, layout = "full" }: Props) => {
+  const compact = layout === "compact";
   const [selectedId, setSelectedId] = useState<BlockId | null>(null);
+  const [editTarget, setEditTarget] = useState<EditTarget>(null);
 
   const updateBlocks = (blocks: Block[]) => onChange({ ...doc, blocks });
 
@@ -123,18 +132,22 @@ const BlockEditor = ({ doc, onChange }: Props) => {
 
   const duplicate = (id: BlockId) => updateBlocks(duplicateBlockById(doc.blocks, id));
 
-  const findSelected = (blocks: Block[]): Block | null => {
+  const findBlockById = (blocks: Block[], id: BlockId | null): Block | null => {
+    if (!id) return null;
     for (const b of blocks) {
-      if (b.id === selectedId) return b;
+      if (b.id === id) return b;
       if (b.type === "columns") {
-        const found = findSelected(b.left) || findSelected(b.right);
+        const found = findBlockById(b.left, id) || findBlockById(b.right, id);
         if (found) return found;
       }
     }
     return null;
   };
 
-  const selected = useMemo(() => findSelected(doc.blocks), [doc.blocks, selectedId]);
+  const selected = useMemo(
+    () => findBlockById(doc.blocks, selectedId),
+    [doc.blocks, selectedId],
+  );
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }));
 
@@ -146,6 +159,105 @@ const BlockEditor = ({ doc, onChange }: Props) => {
     if (oldIndex < 0 || newIndex < 0) return;
     updateBlocks(arrayMove(doc.blocks, oldIndex, newIndex));
   };
+
+  const openEdit = (target: BlockId | "document") => {
+    if (target !== "document") setSelectedId(target);
+    setEditTarget(target);
+  };
+
+  const canvas = (
+    <div
+      className={cn(
+        "overflow-hidden rounded-xl border border-border p-4",
+        compact ? "min-h-[360px]" : "min-h-[620px] xl:p-6",
+      )}
+      style={{ background: doc.background }}
+    >
+      <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+        <SortableContext items={doc.blocks.map((b) => b.id)} strategy={verticalListSortingStrategy}>
+          <div
+            className="mx-auto max-w-full rounded-lg p-4 xl:p-6"
+            style={{
+              background: doc.contentBackground,
+              maxWidth: compact ? "100%" : doc.width,
+              fontFamily: doc.fontFamily,
+            }}
+          >
+            {doc.blocks.length === 0 ? (
+              <p className="py-12 text-center text-sm text-muted-foreground">
+                Add your first block using the buttons above.
+              </p>
+            ) : (
+              doc.blocks.map((block) => (
+                <SortableBlock
+                  key={block.id}
+                  block={block}
+                  selected={selectedId === block.id}
+                  onSelect={() => setSelectedId(block.id)}
+                  onOpenEditFor={compact ? openEdit : undefined}
+                  onDuplicate={() => duplicate(block.id)}
+                  onDelete={() => deleteBlock(block.id)}
+                  selectedId={selectedId}
+                  onSelectChild={setSelectedId}
+                />
+              ))
+            )}
+          </div>
+        </SortableContext>
+      </DndContext>
+    </div>
+  );
+
+  if (compact) {
+    return (
+      <>
+        <div className="space-y-3">
+          <div className="rounded-lg border border-border bg-muted/30 px-3 py-2">
+            <p className="text-xs text-muted-foreground">
+              <span className="font-medium text-foreground">Double-click</span> a block to edit ·{" "}
+              <span className="font-medium text-foreground">Drag</span> the handle to reorder
+            </p>
+          </div>
+
+          <div className="space-y-2">
+            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Add block</p>
+            <div className="flex flex-wrap gap-2">
+              {ALL_BLOCK_TYPES.map((type) => (
+                <button
+                  key={type}
+                  type="button"
+                  onClick={() => addBlock(type)}
+                  className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-background px-2.5 py-1.5 text-xs transition-colors hover:bg-muted"
+                >
+                  {BLOCK_ICONS[type]}
+                  {blockTypeLabels[type]}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+            <BrandThemesPanel doc={doc} onChange={onChange} />
+            <SectionsPanel doc={doc} onChange={onChange} />
+            <Button type="button" variant="outline" size="sm" className="h-9" onClick={() => openEdit("document")}>
+              Page settings
+            </Button>
+          </div>
+
+          {canvas}
+        </div>
+
+        <BlockEditorEditDialog
+          target={editTarget}
+          doc={doc}
+          block={editTarget && editTarget !== "document" ? findBlockById(doc.blocks, editTarget) : null}
+          onChange={onChange}
+          onUpdateBlock={(b) => updateBlockById(b.id, () => b)}
+          onClose={() => setEditTarget(null)}
+        />
+      </>
+    );
+  }
 
   return (
     <div className="grid gap-4 xl:grid-cols-[240px_minmax(0,1.6fr)_320px] 2xl:grid-cols-[260px_minmax(0,1.9fr)_360px]">
@@ -171,45 +283,10 @@ const BlockEditor = ({ doc, onChange }: Props) => {
       </div>
 
       {/* Canvas */}
-      <div
-        className="min-h-[620px] rounded-xl border border-border p-4 xl:p-6"
-        style={{ background: doc.background }}
-      >
-        <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
-          <SortableContext items={doc.blocks.map((b) => b.id)} strategy={verticalListSortingStrategy}>
-            <div
-              className="mx-auto rounded-lg p-4 xl:p-6"
-              style={{
-                background: doc.contentBackground,
-                maxWidth: doc.width,
-                fontFamily: doc.fontFamily,
-              }}
-            >
-              {doc.blocks.length === 0 ? (
-                <p className="py-12 text-center text-sm text-muted-foreground">
-                  Add your first block from the left panel.
-                </p>
-              ) : (
-                doc.blocks.map((block) => (
-                  <SortableBlock
-                    key={block.id}
-                    block={block}
-                    selected={selectedId === block.id}
-                    onSelect={() => setSelectedId(block.id)}
-                    onDuplicate={() => duplicate(block.id)}
-                    onDelete={() => deleteBlock(block.id)}
-                    selectedId={selectedId}
-                    onSelectChild={setSelectedId}
-                  />
-                ))
-              )}
-            </div>
-          </SortableContext>
-        </DndContext>
-      </div>
+      <div className="min-w-0">{canvas}</div>
 
       {/* Inspector */}
-      <div className="space-y-3 rounded-xl border border-border bg-muted/20 p-3">
+      <div className="min-w-0 space-y-3 rounded-xl border border-border bg-muted/20 p-3">
         <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
           {selected ? `Edit ${blockTypeLabels[selected.type]}` : "Document"}
         </p>
@@ -229,6 +306,7 @@ type SortableBlockProps = {
   block: Block;
   selected: boolean;
   onSelect: () => void;
+  onOpenEditFor?: (id: BlockId) => void;
   onDuplicate: () => void;
   onDelete: () => void;
   selectedId: BlockId | null;
@@ -239,6 +317,7 @@ const SortableBlock = ({
   block,
   selected,
   onSelect,
+  onOpenEditFor,
   onDuplicate,
   onDelete,
   selectedId,
@@ -264,6 +343,11 @@ const SortableBlock = ({
       onClick={(e) => {
         e.stopPropagation();
         onSelect();
+      }}
+      onDoubleClick={(e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        onOpenEditFor?.(block.id);
       }}
     >
       <div
@@ -305,7 +389,12 @@ const SortableBlock = ({
           <Trash2 className="h-3.5 w-3.5 text-destructive" />
         </button>
       </div>
-      <BlockRender block={block} selectedId={selectedId} onSelectChild={onSelectChild} />
+      <BlockRender
+        block={block}
+        selectedId={selectedId}
+        onSelectChild={onSelectChild}
+        onOpenEditFor={onOpenEditFor}
+      />
     </div>
   );
 };
@@ -316,11 +405,23 @@ const BlockRender = ({
   block,
   selectedId,
   onSelectChild,
+  onOpenEditFor,
 }: {
   block: Block;
   selectedId: BlockId | null;
   onSelectChild: (id: BlockId) => void;
+  onOpenEditFor?: (id: BlockId) => void;
 }) => {
+  const selectChild = (id: BlockId) => (e: React.MouseEvent) => {
+    e.stopPropagation();
+    onSelectChild(id);
+  };
+  const editChild = (id: BlockId) => (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    onSelectChild(id);
+    onOpenEditFor?.(id);
+  };
   const replace = (s: string) =>
     s.replace(/\{\{(\w+)\}\}/g, (_, k) =>
       k === "FirstName" ? "Ava" : k === "Email" ? "ava@northstar.co" : k === "CompanyName" ? "Northstar" : `{{${k}}}`,
@@ -413,12 +514,15 @@ const BlockRender = ({
                 <div
                   key={b.id}
                   className={`my-1 rounded border ${selectedId === b.id ? "border-primary" : "border-transparent hover:border-border"}`}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onSelectChild(b.id);
-                  }}
+                  onClick={selectChild(b.id)}
+                  onDoubleClick={editChild(b.id)}
                 >
-                  <BlockRender block={b} selectedId={selectedId} onSelectChild={onSelectChild} />
+                  <BlockRender
+                    block={b}
+                    selectedId={selectedId}
+                    onSelectChild={onSelectChild}
+                    onOpenEditFor={onOpenEditFor}
+                  />
                 </div>
               ))}
             </div>
@@ -430,12 +534,15 @@ const BlockRender = ({
                 <div
                   key={b.id}
                   className={`my-1 rounded border ${selectedId === b.id ? "border-primary" : "border-transparent hover:border-border"}`}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onSelectChild(b.id);
-                  }}
+                  onClick={selectChild(b.id)}
+                  onDoubleClick={editChild(b.id)}
                 >
-                  <BlockRender block={b} selectedId={selectedId} onSelectChild={onSelectChild} />
+                  <BlockRender
+                    block={b}
+                    selectedId={selectedId}
+                    onSelectChild={onSelectChild}
+                    onOpenEditFor={onOpenEditFor}
+                  />
                 </div>
               ))}
             </div>
@@ -1115,6 +1222,58 @@ const SectionsPanel = ({
         </DialogContent>
       </Dialog>
     </>
+  );
+};
+
+const BlockEditorEditDialog = ({
+  target,
+  doc,
+  block,
+  onChange,
+  onUpdateBlock,
+  onClose,
+}: {
+  target: EditTarget;
+  doc: TemplateDocument;
+  block: Block | null;
+  onChange: (doc: TemplateDocument) => void;
+  onUpdateBlock: (b: Block) => void;
+  onClose: () => void;
+}) => {
+  if (!target) return null;
+
+  const title =
+    target === "document" ? "Page settings" : block ? `Edit ${blockTypeLabels[block.type]}` : "Edit block";
+
+  return (
+    <Dialog open onOpenChange={(open) => !open && onClose()}>
+      <DialogContent className="max-w-md gap-0 overflow-hidden p-0">
+        <DialogHeader className="border-b border-border px-5 py-4 text-left">
+          <DialogTitle className="text-base">{title}</DialogTitle>
+          <DialogDescription className="text-xs">
+            {target === "document"
+              ? "Colors and layout for the whole email."
+              : "Changes apply to this block only."}
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="max-h-[min(60vh,480px)] overflow-y-auto px-5 py-4">
+          {target === "document" ? (
+            <DocumentInspector doc={doc} onChange={onChange} />
+          ) : block ? (
+            <BlockInspector block={block} onChange={onUpdateBlock} />
+          ) : (
+            <p className="text-sm text-muted-foreground">Block not found.</p>
+          )}
+        </div>
+
+        <DialogFooter className="border-t border-border px-5 py-3 sm:justify-end">
+          <Button type="button" onClick={onClose}>
+            Done
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 };
 
