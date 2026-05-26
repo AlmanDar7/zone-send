@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import {
   DndContext,
   PointerSensor,
@@ -14,13 +14,30 @@ import {
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { GripVertical, Palette, Pencil } from "lucide-react";
+import {
+  GripVertical,
+  Heading1,
+  Type,
+  Image as ImageIcon,
+  MousePointerClick,
+  Palette,
+  Pencil,
+  Tag,
+  AlignLeft,
+  PanelBottom,
+  LayoutList,
+  Trash2,
+} from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { VisualTemplateConfig, TemplateVariableValues } from "@/lib/template-presets";
 import { replaceTemplateVariables } from "@/lib/template-presets";
 import {
+  appendSectionToOrder,
   normalizeSectionOrder,
+  removeSectionFromOrder,
   visualSectionMeta,
+  VISUAL_SECTION_PALETTE,
+  visualSectionBuilderLabel,
   type VisualSectionId,
 } from "@/lib/visual-template-sections";
 import VisualSectionEditDialog from "@/components/VisualSectionEditDialog";
@@ -33,11 +50,33 @@ type Props = {
     key: K,
     value: VisualTemplateConfig[K],
   ) => void;
+  /** Sidebar with block-style add controls (campaign wizard) */
+  layout?: "compact" | "sidebar";
 };
 
-const VisualTemplateCanvas = ({ config, variables, onConfigChange, onUpdateField }: Props) => {
+const PALETTE_ICONS: Record<VisualSectionId, ReactNode> = {
+  brand: <Tag className="h-4 w-4" />,
+  eyebrow: <AlignLeft className="h-4 w-4" />,
+  hero: <ImageIcon className="h-4 w-4" />,
+  headline: <Heading1 className="h-4 w-4" />,
+  subheadline: <Type className="h-4 w-4" />,
+  body: <Type className="h-4 w-4" />,
+  cta: <MousePointerClick className="h-4 w-4" />,
+  secondary: <LayoutList className="h-4 w-4" />,
+  footer: <PanelBottom className="h-4 w-4" />,
+  style: <Palette className="h-4 w-4" />,
+};
+
+const VisualTemplateCanvas = ({
+  config,
+  variables,
+  onConfigChange,
+  onUpdateField,
+  layout = "compact",
+}: Props) => {
   const [selectedId, setSelectedId] = useState<VisualSectionId | null>(null);
   const [editingId, setEditingId] = useState<VisualSectionId | null>(null);
+  const sidebar = layout === "sidebar";
 
   const sectionOrder = useMemo(
     () => normalizeSectionOrder(config.sectionOrder),
@@ -63,47 +102,154 @@ const VisualTemplateCanvas = ({ config, variables, onConfigChange, onUpdateField
     setEditingId(id);
   };
 
-  return (
-    <>
-      <div className="space-y-3">
-        <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-border bg-muted/30 px-3 py-2">
-          <p className="text-xs text-muted-foreground">
-            <span className="font-medium text-foreground">Double-click</span> a section to edit ·{" "}
-            <span className="font-medium text-foreground">Drag</span> the handle to reorder
-          </p>
-          <button
-            type="button"
-            onClick={() => openEditor("style")}
-            className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs text-muted-foreground hover:bg-background hover:text-foreground"
-          >
-            <Palette className="h-3.5 w-3.5" />
-            Colors
-          </button>
-        </div>
+  const addOrEditSection = (id: VisualSectionId) => {
+    const nextOrder = appendSectionToOrder(config.sectionOrder, id);
+    if (nextOrder.length !== sectionOrder.length) {
+      onConfigChange({ ...config, sectionOrder: nextOrder });
+    }
+    openEditor(id);
+  };
 
-        <div
-          className="rounded-2xl border border-border p-4 sm:p-6"
-          style={{ backgroundColor: config.backgroundColor }}
-        >
-          <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
-            <SortableContext items={sectionOrder} strategy={verticalListSortingStrategy}>
-              <div className="mx-auto max-w-md space-y-0">
-                {sectionOrder.map((sectionId) => (
-                  <SortableSection
-                    key={sectionId}
-                    sectionId={sectionId}
-                    config={config}
-                    variables={variables}
-                    selected={selectedId === sectionId}
-                    onSelect={() => setSelectedId(sectionId)}
-                    onEdit={() => openEditor(sectionId)}
-                  />
-                ))}
-              </div>
-            </SortableContext>
-          </DndContext>
+  const removeSection = (id: VisualSectionId) => {
+    const nextOrder = removeSectionFromOrder(config.sectionOrder, id);
+    onConfigChange({ ...config, sectionOrder: nextOrder });
+    if (selectedId === id) setSelectedId(null);
+    if (editingId === id) setEditingId(null);
+  };
+
+  const canvas = (
+    <div
+      className={cn(
+        "overflow-hidden rounded-2xl border border-border p-4 sm:p-6",
+        sidebar ? "min-h-[420px]" : "",
+      )}
+      style={{ backgroundColor: config.backgroundColor }}
+    >
+      {sectionOrder.length === 0 ? (
+        <p className="py-16 text-center text-sm text-muted-foreground">
+          Add sections from the left panel to build your email.
+        </p>
+      ) : (
+        <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+          <SortableContext items={sectionOrder} strategy={verticalListSortingStrategy}>
+            <div className="mx-auto max-w-md space-y-0">
+              {sectionOrder.map((sectionId) => (
+                <SortableSection
+                  key={sectionId}
+                  sectionId={sectionId}
+                  config={config}
+                  variables={variables}
+                  selected={selectedId === sectionId}
+                  onSelect={() => setSelectedId(sectionId)}
+                  onEdit={() => openEditor(sectionId)}
+                />
+              ))}
+            </div>
+          </SortableContext>
+        </DndContext>
+      )}
+    </div>
+  );
+
+  const sidebarPanel = (
+    <aside className="space-y-4 rounded-xl border border-border bg-muted/20 p-3 lg:sticky lg:top-4 lg:self-start">
+      <div>
+        <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Add section</p>
+        <div className="mt-2 grid grid-cols-2 gap-2">
+          {VISUAL_SECTION_PALETTE.map((id) => {
+            const active = sectionOrder.includes(id);
+            return (
+              <button
+                key={id}
+                type="button"
+                onClick={() => addOrEditSection(id)}
+                className={cn(
+                  "flex items-center gap-2 rounded-lg border bg-background px-2.5 py-2 text-left text-xs transition-colors hover:bg-muted",
+                  active ? "border-primary/50 ring-1 ring-primary/20" : "border-border",
+                )}
+              >
+                {PALETTE_ICONS[id]}
+                <span className="font-medium text-foreground">{visualSectionBuilderLabel[id]}</span>
+              </button>
+            );
+          })}
         </div>
       </div>
+
+      <button
+        type="button"
+        onClick={() => openEditor("style")}
+        className="flex w-full items-center gap-2 rounded-lg border border-border bg-background px-3 py-2 text-xs font-medium hover:bg-muted"
+      >
+        <Palette className="h-4 w-4 text-primary" />
+        Page colors
+      </button>
+
+      {sectionOrder.length > 0 && (
+        <div className="space-y-2 border-t border-border pt-3">
+          <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">In your email</p>
+          <ul className="space-y-1">
+            {sectionOrder.map((id) => (
+              <li
+                key={id}
+                className={cn(
+                  "flex items-center gap-1 rounded-md border border-transparent pr-1",
+                  selectedId === id && "border-primary/30 bg-primary/5",
+                )}
+              >
+                <button
+                  type="button"
+                  onClick={() => openEditor(id)}
+                  className="min-w-0 flex-1 truncate px-2 py-1.5 text-left text-xs text-foreground hover:underline"
+                >
+                  {visualSectionBuilderLabel[id]}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => removeSection(id)}
+                  className="rounded p-1 text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+                  aria-label={`Remove ${visualSectionBuilderLabel[id]}`}
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                </button>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      <p className="text-[11px] leading-relaxed text-muted-foreground">
+        Double-click a section on the preview to edit. Drag the handle to reorder.
+      </p>
+    </aside>
+  );
+
+  return (
+    <>
+      {sidebar ? (
+        <div className="grid gap-4 lg:grid-cols-[minmax(200px,240px)_minmax(0,1fr)] lg:items-start">
+          {sidebarPanel}
+          <div className="min-w-0 space-y-3">{canvas}</div>
+        </div>
+      ) : (
+        <div className="space-y-3">
+          <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-border bg-muted/30 px-3 py-2">
+            <p className="text-xs text-muted-foreground">
+              <span className="font-medium text-foreground">Double-click</span> a section to edit ·{" "}
+              <span className="font-medium text-foreground">Drag</span> the handle to reorder
+            </p>
+            <button
+              type="button"
+              onClick={() => openEditor("style")}
+              className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs text-muted-foreground hover:bg-background hover:text-foreground"
+            >
+              <Palette className="h-3.5 w-3.5" />
+              Colors
+            </button>
+          </div>
+          {canvas}
+        </div>
+      )}
 
       <VisualSectionEditDialog
         sectionId={editingId}
@@ -225,11 +371,7 @@ const SectionPreview = ({
     case "hero":
       return (
         <div className="px-4 pb-3">
-          <img
-            src={config.heroImageUrl}
-            alt=""
-            className="h-40 w-full rounded-2xl object-cover"
-          />
+          <img src={config.heroImageUrl} alt="" className="h-40 w-full rounded-2xl object-cover" />
         </div>
       );
     case "headline":

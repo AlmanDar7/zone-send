@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   ArrowLeft, ArrowRight, Check, Search, Users, Calendar as CalendarIcon,
-  Send, Clock, Sparkles, Edit3, Folder, LayoutTemplate,
+  Send, Clock, Sparkles, Edit3, Folder,
   Upload, FileSpreadsheet, X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -33,13 +33,8 @@ import { isCampaignNameTaken, parseCampaignNameConflict } from "@/lib/campaign-n
 import StepIndicator from "@/components/wizard/StepIndicator";
 import SuccessModal from "@/components/wizard/SuccessModal";
 import TemplatePreview from "@/components/TemplatePreview";
-import BlockEditor from "@/components/BlockEditor";
 import VisualTemplateCanvas from "@/components/VisualTemplateCanvas";
 import TimezoneSelector from "@/components/TimezoneSelector";
-import {
-  createEmptyDocument, isTemplateDocument, renderDocumentHtml, renderDocumentPlain,
-  buildDocumentFromLegacy, type TemplateDocument,
-} from "@/lib/template-blocks";
 import {
   buildVisualTemplateContent,
   getStarterTemplate,
@@ -60,17 +55,9 @@ type FolderRow = Database["public"]["Tables"]["contact_folders"]["Row"];
 const STEPS = ["Template", "From", "Subject", "Audience", "Send"];
 const TOTAL_STEPS = STEPS.length;
 
-type EditorFormat = "visual" | "blocks" | "plain";
-
 const isVisualTemplateConfig = (value: unknown): value is VisualTemplateConfig => {
   if (!value || typeof value !== "object") return false;
   return typeof (value as { presetId?: unknown }).presetId === "string";
-};
-
-const resolveEditorFormat = (t: EmailRow): EditorFormat => {
-  if (t.template_format === "blocks" && isTemplateDocument(t.blocks)) return "blocks";
-  if (t.template_format === "visual" || isVisualTemplateConfig(t.design_config)) return "visual";
-  return "plain";
 };
 
 const toVisualConfig = (t: EmailRow): VisualTemplateConfig => {
@@ -98,10 +85,7 @@ const CampaignWizard = () => {
 
   // Step 1
   const [selectedTemplate, setSelectedTemplate] = useState<EmailRow | null>(null);
-  const [editorFormat, setEditorFormat] = useState<EditorFormat>("visual");
   const [designConfig, setDesignConfig] = useState<VisualTemplateConfig | null>(null);
-  const [editorDoc, setEditorDoc] = useState<TemplateDocument | null>(null);
-  const [plainBody, setPlainBody] = useState("");
   const [editing, setEditing] = useState(false);
   const [previewVariables, setPreviewVariables] = useState<TemplateVariableValues>(sampleTemplateVariables);
 
@@ -390,36 +374,8 @@ const CampaignWizard = () => {
   }, [selectedFolderIds, selectedContactIds, folderMembers, contacts]);
 
   /* ----------------- Step 1 helpers ----------------- */
-  const toDoc = (t: EmailRow): TemplateDocument => {
-    if (isTemplateDocument(t.blocks)) return t.blocks as TemplateDocument;
-    const cfg = (t.design_config as any) || {};
-    return buildDocumentFromLegacy(t.body || "", {
-      heading: cfg.headline || t.name,
-      ctaText: cfg.ctaText || cfg.ctaLabel,
-      ctaHref: cfg.ctaUrl,
-      heroImageUrl: cfg.heroImageUrl,
-      eyebrow: cfg.eyebrow,
-      subheadline: cfg.subheadline,
-      footerNote: cfg.footerNote,
-    });
-  };
-
   const initEditorFromTemplate = (t: EmailRow) => {
-    const format = resolveEditorFormat(t);
-    setEditorFormat(format);
-    if (format === "visual") {
-      setDesignConfig(toVisualConfig(t));
-      setEditorDoc(null);
-      setPlainBody("");
-    } else if (format === "blocks") {
-      setEditorDoc(toDoc(t));
-      setDesignConfig(null);
-      setPlainBody("");
-    } else {
-      setPlainBody(t.body);
-      setEditorDoc(null);
-      setDesignConfig(null);
-    }
+    setDesignConfig(toVisualConfig(t));
   };
 
   const startEditing = (t: EmailRow) => {
@@ -462,10 +418,6 @@ const CampaignWizard = () => {
 
       return nextConfig;
     });
-  };
-
-  const updateBlocksDoc = (doc: TemplateDocument) => {
-    setEditorDoc(doc);
   };
 
   const pickPreset = async (presetId: VisualTemplatePresetId) => {
@@ -520,16 +472,13 @@ const CampaignWizard = () => {
 
   const renderedHtml = useMemo(() => {
     if (designConfig) return buildVisualTemplateContent(designConfig).htmlBody;
-    if (editorDoc) return renderDocumentHtml(editorDoc);
     return selectedTemplate?.html_body || "";
-  }, [designConfig, editorDoc, selectedTemplate]);
+  }, [designConfig, selectedTemplate]);
 
   const renderedPlain = useMemo(() => {
     if (designConfig) return buildVisualTemplateContent(designConfig).body;
-    if (editorDoc) return renderDocumentPlain(editorDoc);
-    if (plainBody) return plainBody;
     return selectedTemplate?.body || "";
-  }, [designConfig, editorDoc, plainBody, selectedTemplate]);
+  }, [designConfig, selectedTemplate]);
 
   /* ----------------- Send ----------------- */
   const sendCampaign = useMutation({
@@ -560,41 +509,19 @@ const CampaignWizard = () => {
         if (scheduledAt.getTime() < Date.now()) throw new Error("Schedule must be in the future");
       }
 
-      // Persist edited template
-      let html = selectedTemplate.html_body;
-      let plain = selectedTemplate.body;
-      let templateFormat = selectedTemplate.template_format;
-      let blocksPayload: TemplateDocument | null = null;
-      let designPayload: VisualTemplateConfig | null = null;
-
-      if (designConfig) {
-        const visualContent = buildVisualTemplateContent(designConfig);
-        html = visualContent.htmlBody;
-        plain = visualContent.body;
-        templateFormat = "visual";
-        designPayload = designConfig;
-        blocksPayload = null;
-      } else if (editorDoc) {
-        html = renderDocumentHtml(editorDoc);
-        plain = renderDocumentPlain(editorDoc);
-        templateFormat = "blocks";
-        blocksPayload = editorDoc;
-        designPayload = null;
-      } else if (plainBody) {
-        plain = plainBody;
-        html = null;
-        templateFormat = "plain";
-      }
+      // Persist edited template (always visual in campaign wizard)
+      const visualConfig = designConfig || toVisualConfig(selectedTemplate);
+      const visualContent = buildVisualTemplateContent(visualConfig);
 
       await supabase
         .from("email_templates")
         .update({
           subject,
-          body: plain,
-          html_body: html,
-          blocks: blocksPayload as any,
-          design_config: designPayload as any,
-          template_format: templateFormat,
+          body: visualContent.body,
+          html_body: visualContent.htmlBody,
+          blocks: null,
+          design_config: visualConfig as any,
+          template_format: "visual",
         })
         .eq("id", selectedTemplate.id);
 
@@ -697,7 +624,7 @@ const CampaignWizard = () => {
     step === 1 && !editing
       ? "max-w-6xl"
       : step === 1 && editing
-        ? "max-w-3xl"
+        ? "max-w-6xl"
         : step === 2
           ? "max-w-xl"
           : step === 3
@@ -778,7 +705,7 @@ const CampaignWizard = () => {
               />
             )}
 
-            {step === 1 && editing && selectedTemplate && (
+            {step === 1 && editing && selectedTemplate && designConfig && (
               <div className="space-y-4">
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div>
@@ -786,74 +713,45 @@ const CampaignWizard = () => {
                       Customize template
                     </h2>
                     <p className="text-sm text-muted-foreground">
-                      {editorFormat === "visual"
-                        ? "Double-click a section to edit · drag to reorder"
-                        : editorFormat === "blocks"
-                          ? "Double-click a block to edit · drag to reorder"
-                          : "Edit your email body below"}
+                      Add sections on the left, then edit on the preview.
                     </p>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <Badge variant="secondary" className="gap-1">
-                      <LayoutTemplate className="h-3.5 w-3.5" />
-                      {editorFormat === "visual" ? "Visual editor" : editorFormat === "blocks" ? "Block editor" : "Plain"}
-                    </Badge>
-                    <Button variant="outline" size="sm" onClick={() => setEditing(false)}>
-                      Back to gallery
-                    </Button>
+                  <Button variant="outline" size="sm" onClick={() => setEditing(false)}>
+                    Back to gallery
+                  </Button>
+                </div>
+
+                <div className="grid gap-3 rounded-xl border border-border bg-muted/20 p-3 sm:grid-cols-2 lg:max-w-md">
+                  <div className="space-y-2">
+                    <Label className="text-xs">Preview as (first name)</Label>
+                    <Input
+                      value={previewVariables.FirstName}
+                      onChange={(e) =>
+                        setPreviewVariables((prev) => ({ ...prev, FirstName: e.target.value }))
+                      }
+                      placeholder="Ava"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-xs">Preview company</Label>
+                    <Input
+                      value={previewVariables.CompanyName}
+                      onChange={(e) =>
+                        setPreviewVariables((prev) => ({ ...prev, CompanyName: e.target.value }))
+                      }
+                      placeholder="Northstar"
+                    />
                   </div>
                 </div>
 
-                <div className="rounded-2xl border border-border bg-card p-4 shadow-sm sm:p-6">
-                  {editorFormat === "visual" && designConfig && (
-                    <div className="space-y-4">
-                      <div className="grid gap-3 rounded-xl border border-border bg-muted/20 p-3 sm:grid-cols-2">
-                        <div className="space-y-2">
-                          <Label className="text-xs">Preview as (first name)</Label>
-                          <Input
-                            value={previewVariables.FirstName}
-                            onChange={(e) =>
-                              setPreviewVariables((prev) => ({ ...prev, FirstName: e.target.value }))
-                            }
-                            placeholder="Ava"
-                          />
-                        </div>
-                        <div className="space-y-2">
-                          <Label className="text-xs">Preview company</Label>
-                          <Input
-                            value={previewVariables.CompanyName}
-                            onChange={(e) =>
-                              setPreviewVariables((prev) => ({ ...prev, CompanyName: e.target.value }))
-                            }
-                            placeholder="Northstar"
-                          />
-                        </div>
-                      </div>
-                      <VisualTemplateCanvas
-                        config={designConfig}
-                        variables={previewVariables}
-                        onConfigChange={replaceVisualConfig}
-                        onUpdateField={updateVisualConfig}
-                      />
-                    </div>
-                  )}
-
-                  {editorFormat === "blocks" && editorDoc && (
-                    <BlockEditor doc={editorDoc} onChange={updateBlocksDoc} layout="compact" />
-                  )}
-
-                  {editorFormat === "plain" && (
-                    <div className="space-y-2">
-                      <Label>Email body</Label>
-                      <Textarea
-                        value={plainBody}
-                        onChange={(e) => setPlainBody(e.target.value)}
-                        rows={14}
-                        placeholder="Hi {{FirstName}},"
-                        className="font-mono text-sm"
-                      />
-                    </div>
-                  )}
+                <div className="rounded-2xl border border-border bg-card p-4 shadow-sm sm:p-5">
+                  <VisualTemplateCanvas
+                    config={designConfig}
+                    variables={previewVariables}
+                    onConfigChange={replaceVisualConfig}
+                    onUpdateField={updateVisualConfig}
+                    layout="sidebar"
+                  />
                 </div>
               </div>
             )}

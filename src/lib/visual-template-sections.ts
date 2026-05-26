@@ -56,6 +56,46 @@ export const visualSectionMeta: Record<
   style: { label: "Colors", hint: "Accent and background colors" },
 };
 
+/** Sections users can add from the campaign editor sidebar (excludes style) */
+export const VISUAL_SECTION_PALETTE: VisualSectionId[] = [
+  "brand",
+  "eyebrow",
+  "hero",
+  "headline",
+  "subheadline",
+  "body",
+  "cta",
+  "secondary",
+  "footer",
+];
+
+export const visualSectionBuilderLabel: Record<VisualSectionId, string> = {
+  brand: "Brand",
+  eyebrow: "Label",
+  hero: "Image",
+  headline: "Heading",
+  subheadline: "Subheading",
+  body: "Text",
+  cta: "Button",
+  secondary: "Info box",
+  footer: "Footer",
+  style: "Colors",
+};
+
+export const appendSectionToOrder = (
+  order: VisualSectionId[] | null | undefined,
+  sectionId: VisualSectionId,
+): VisualSectionId[] => {
+  const normalized = normalizeSectionOrder(order);
+  if (sectionId === "style" || normalized.includes(sectionId)) return normalized;
+  return [...normalized, sectionId];
+};
+
+export const removeSectionFromOrder = (
+  order: VisualSectionId[] | null | undefined,
+  sectionId: VisualSectionId,
+): VisualSectionId[] => normalizeSectionOrder(order).filter((id) => id !== sectionId);
+
 export const normalizeSectionOrder = (
   order?: VisualSectionId[] | null,
 ): VisualSectionId[] => {
