@@ -14,13 +14,7 @@ const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
 
   if (!user) return <Navigate to="/login" replace />;
 
-  // Check email verification - OAuth providers (e.g. Google) mark verification via user_metadata.email_verified
-  const providers: string[] = (user.app_metadata as { providers?: string[] })?.providers ?? [];
-  const isOAuthUser = providers.some((p) => p !== "email");
-  const oauthVerified = (user.user_metadata as { email_verified?: boolean })?.email_verified === true;
-  const emailVerified = !!user.email_confirmed_at || (isOAuthUser && oauthVerified);
-
-  if (!emailVerified) {
+  if (!user.emailVerified) {
     return <Navigate to="/verify-email" replace />;
   }
 

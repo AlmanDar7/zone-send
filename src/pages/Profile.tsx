@@ -4,6 +4,8 @@ import { motion } from "framer-motion";
 import { UserCircle2, Lock, Trash2 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
+import { deleteFirebaseUser, updateUserPassword, updateUserProfile } from "@/lib/firebaseAuth";
+import { getAccessToken } from "@/lib/getAccessToken";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -77,11 +79,7 @@ const Profile = () => {
         if (error) throw error;
       }
 
-      const { error: authError } = await supabase.auth.updateUser({
-        data: { full_name: trimmedName, name: trimmedName },
-      });
-
-      if (authError) throw authError;
+      await updateUserProfile({ displayName: trimmedName });
     },
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ["profile", user?.id] });
@@ -97,8 +95,7 @@ const Profile = () => {
       if (password.length < 6) throw new Error("Password must be at least 6 characters.");
       if (password !== confirmPassword) throw new Error("Passwords do not match.");
 
-      const { error } = await supabase.auth.updateUser({ password });
-      if (error) throw error;
+      await updateUserPassword(password);
     },
     onSuccess: () => {
       setPassword("");
@@ -112,11 +109,16 @@ const Profile = () => {
 
   const deleteAccount = useMutation({
     mutationFn: async () => {
+      const accessToken = await getAccessToken();
+      if (!accessToken) throw new Error("You must be signed in to delete your account.");
+
       const { error } = await supabase.functions.invoke("delete-account", {
+        headers: { Authorization: `Bearer ${accessToken}` },
         body: {},
       });
 
       if (error) throw error;
+      await deleteFirebaseUser();
     },
     onSuccess: async () => {
       toast.success("Account deleted successfully.");

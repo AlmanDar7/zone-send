@@ -1,5 +1,9 @@
 project_id = "gklclznwdhvohaedsfxi"
 
+[auth.third_party.firebase]
+enabled = true
+project_id = "reachquix-64323"
+
 [functions.send-email]
 verify_jwt = false
 

@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
-import { supabase } from "@/integrations/supabase/client";
+import { requestPasswordReset } from "@/lib/firebaseAuth";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -10,6 +10,7 @@ import { Eye, EyeOff } from "lucide-react";
 import AppLogo from "@/components/AppLogo";
 import { motion } from "framer-motion";
 import { toast } from "sonner";
+import { getOAuthErrorMessage } from "@/lib/authErrors";
 
 const GoogleIcon = () => (
   <svg className="w-5 h-5" viewBox="0 0 24 24">
@@ -23,16 +24,18 @@ const GoogleIcon = () => (
 const getAuthErrorMessage = (error: unknown) => {
   const message = error instanceof Error ? error.message : "Authentication failed";
 
-  if (message.includes("Invalid login credentials")) return "Invalid email or password.";
-  if (message.includes("User already registered")) return "Email already exists.";
-  if (message.includes("verify your email")) return "Please verify your email before signing in.";
+  if (message.includes("Invalid login credentials") || message.includes("auth/invalid-credential")) {
+    return "Invalid email or password.";
+  }
+  if (message.includes("email-already-in-use")) return "Email already exists.";
+  if (message.includes("verify your email")) return message;
 
   return message;
 };
 
 const Login = () => {
   const navigate = useNavigate();
-  const { signIn, signUp, user, loading: authLoading } = useAuth();
+  const { signIn, signUp, signInWithGoogle, user, loading: authLoading } = useAuth();
   const [isSignUp, setIsSignUp] = useState(false);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -43,7 +46,11 @@ const Login = () => {
 
   useEffect(() => {
     if (!authLoading && user) {
-      navigate("/dashboard", { replace: true });
+      if (user.emailVerified) {
+        navigate("/dashboard", { replace: true });
+      } else {
+        navigate("/verify-email", { replace: true });
+      }
     }
   }, [authLoading, navigate, user]);
 
@@ -65,11 +72,7 @@ const Login = () => {
       navigate("/dashboard");
     } catch (error) {
       const message = getAuthErrorMessage(error);
-      if (isSignUp && !message) {
-        toast.error("Verification email could not be sent. Try again.");
-      } else {
-        toast.error(message || "Verification email could not be sent. Try again.");
-      }
+      toast.error(message || "Authentication failed");
     } finally {
       setLoading(false);
     }
@@ -79,16 +82,12 @@ const Login = () => {
     setOauthLoading(true);
 
     try {
-      const { error } = await supabase.auth.signInWithOAuth({
-        provider: "google",
-        options: {
-          redirectTo: `${window.location.origin}/auth/callback`,
-        },
-      });
-
-      if (error) throw error;
+      await signInWithGoogle();
+      toast.success("Logged in successfully");
+      navigate("/dashboard");
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Google sign in failed. Please try again.");
+      toast.error(getOAuthErrorMessage(error));
+    } finally {
       setOauthLoading(false);
     }
   };
@@ -102,12 +101,7 @@ const Login = () => {
     setForgotLoading(true);
 
     try {
-      const { error } = await supabase.auth.resetPasswordForEmail(email, {
-        redirectTo: `${window.location.origin}/reset-password`,
-      });
-
-      if (error) throw error;
-
+      await requestPasswordReset(email);
       toast.success("Password reset sent. Check your email.");
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Failed to send reset email");

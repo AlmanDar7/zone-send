@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
-import { supabase } from "@/integrations/supabase/client";
+import { sendVerificationEmail } from "@/lib/firebaseAuth";
 import { Button } from "@/components/ui/button";
 import { Mail, RefreshCw, CheckCircle } from "lucide-react";
 import { motion } from "framer-motion";
@@ -24,31 +24,17 @@ const VerifyEmail = () => {
       sessionStorage.setItem("pendingVerificationEmail", verificationEmail);
     }
 
-    if (user?.email_confirmed_at) {
+    if (user?.emailVerified) {
       sessionStorage.removeItem("pendingVerificationEmail");
       navigate("/dashboard", { replace: true });
     }
-  }, [navigate, user?.email_confirmed_at, verificationEmail]);
+  }, [navigate, user?.emailVerified, verificationEmail]);
 
   const handleResend = async () => {
-    if (!verificationEmail) {
-      toast.error("Verification email could not be sent. Try again.");
-      return;
-    }
-
     setResending(true);
 
     try {
-      const { error } = await supabase.auth.resend({
-        type: "signup",
-        email: verificationEmail,
-        options: {
-          emailRedirectTo: `${window.location.origin}/verify-email`,
-        },
-      });
-
-      if (error) throw error;
-
+      await sendVerificationEmail();
       toast.success("Verification email sent successfully");
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Verification email could not be sent. Try again.");
@@ -61,10 +47,9 @@ const VerifyEmail = () => {
     setChecking(true);
 
     try {
-      await supabase.auth.refreshSession();
       const refreshedUser = await refreshUser();
 
-      if (refreshedUser?.email_confirmed_at) {
+      if (refreshedUser?.emailVerified) {
         sessionStorage.removeItem("pendingVerificationEmail");
         toast.success("Email verified successfully");
         navigate("/dashboard", { replace: true });
@@ -101,7 +86,7 @@ const VerifyEmail = () => {
         <div className="space-y-3">
           <h1 className="text-2xl font-display font-bold text-foreground">Verify your email</h1>
           <p className="text-sm text-muted-foreground">
-            We've sent a verification link to your email. Please verify to continue.
+            We&apos;ve sent a verification link to your email. Please verify to continue.
           </p>
           {verificationEmail && (
             <p className="text-sm font-medium text-foreground">{verificationEmail}</p>

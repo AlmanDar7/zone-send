@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { supabase } from "@/integrations/supabase/client";
+import { confirmPasswordReset, verifyPasswordResetCode } from "firebase/auth";
+import { getFirebaseAuth } from "@/integrations/firebase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -14,25 +15,30 @@ const ResetPassword = () => {
   const [confirmPassword, setConfirmPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [isRecovery, setIsRecovery] = useState(false);
+  const [oobCode, setOobCode] = useState<string | null>(null);
+  const [checkingLink, setCheckingLink] = useState(true);
 
   useEffect(() => {
-    const hashParams = new URLSearchParams(window.location.hash.substring(1));
-    if (hashParams.get("type") === "recovery") {
-      setIsRecovery(true);
+    const params = new URLSearchParams(window.location.search);
+    const code = params.get("oobCode");
+    const mode = params.get("mode");
+
+    if (mode === "resetPassword" && code) {
+      verifyPasswordResetCode(getFirebaseAuth(), code)
+        .then(() => setOobCode(code))
+        .catch(() => setOobCode(null))
+        .finally(() => setCheckingLink(false));
+      return;
     }
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
-      if (event === "PASSWORD_RECOVERY") {
-        setIsRecovery(true);
-      }
-    });
-
-    return () => subscription.unsubscribe();
+    setOobCode(null);
+    setCheckingLink(false);
   }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!oobCode) return;
+
     if (password !== confirmPassword) {
       toast.error("Passwords do not match");
       return;
@@ -41,20 +47,28 @@ const ResetPassword = () => {
       toast.error("Password must be at least 6 characters");
       return;
     }
+
     setLoading(true);
     try {
-      const { error } = await supabase.auth.updateUser({ password });
-      if (error) throw error;
+      await confirmPasswordReset(getFirebaseAuth(), oobCode, password);
       toast.success("Password updated successfully!");
-      navigate("/dashboard");
-    } catch (err: any) {
-      toast.error(err.message || "Failed to update password");
+      navigate("/login");
+    } catch (err: unknown) {
+      toast.error(err instanceof Error ? err.message : "Failed to update password");
     } finally {
       setLoading(false);
     }
   };
 
-  if (!isRecovery) {
+  if (checkingLink) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+      </div>
+    );
+  }
+
+  if (!oobCode) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center p-8">
         <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} className="w-full max-w-sm space-y-6 text-center">
@@ -64,8 +78,10 @@ const ResetPassword = () => {
             </div>
             <h1 className="font-display font-bold text-xl text-foreground">Reachquix</h1>
           </div>
-          <p className="text-muted-foreground">Invalid or expired reset link. Please request a new one.</p>
-          <Button onClick={() => navigate("/login")} variant="outline" className="w-full">Back to Login</Button>
+          <p className="text-muted-foreground">Invalid or expired reset link. Please request a new one from the login page.</p>
+          <Button onClick={() => navigate("/login")} variant="outline" className="w-full">
+            Back to Login
+          </Button>
         </motion.div>
       </div>
     );
@@ -97,7 +113,11 @@ const ResetPassword = () => {
                 minLength={6}
                 className="pr-10"
               />
-              <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors">
+              <button
+                type="button"
+                onClick={() => setShowPassword(!showPassword)}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+              >
                 {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
               </button>
             </div>

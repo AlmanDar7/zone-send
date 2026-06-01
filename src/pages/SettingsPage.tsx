@@ -11,6 +11,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { getSmtpConfigError, hasUsableSmtpConfig } from "@/lib/smtpValidation";
+import { getAccessToken } from "@/lib/getAccessToken";
 import { getPayloadErrorMessage, getSupabaseFunctionErrorMessage } from "@/lib/supabaseFunctionErrors";
 
 const SettingsPage = () => {
@@ -113,9 +114,8 @@ const SettingsPage = () => {
     mutationFn: async () => {
       if (!testEmail.trim()) throw new Error("Enter a test recipient email");
 
-      const { data: refreshData, error: refreshError } = await supabase.auth.refreshSession();
-      const session = refreshData.session;
-      if (refreshError || !session?.access_token) {
+      const accessToken = await getAccessToken();
+      if (!accessToken) {
         throw new Error("You must be logged in to send a test email.");
       }
 
@@ -123,7 +123,7 @@ const SettingsPage = () => {
 
       const sendPromise = supabase.functions.invoke("send-email", {
         headers: {
-          Authorization: `Bearer ${session.access_token}`,
+          Authorization: `Bearer ${accessToken}`,
         },
         body: {
           to: testEmail.trim(),

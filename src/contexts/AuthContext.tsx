@@ -1,25 +1,35 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
+import { onAuthStateChanged } from "firebase/auth";
 import { supabase } from "@/integrations/supabase/client";
-import type { User, Session } from "@supabase/supabase-js";
+import { getFirebaseAuth } from "@/integrations/firebase/client";
+import { isFirebaseConfigured } from "@/integrations/firebase/config";
+import {
+  mapFirebaseUser,
+  signInWithEmail,
+  signInWithGoogle,
+  signOutUser,
+  signUpWithEmail,
+  reloadCurrentUser,
+} from "@/lib/firebaseAuth";
+import type { AppUser } from "@/types/auth";
 
 interface AuthContextType {
-  user: User | null;
-  session: Session | null;
+  user: AppUser | null;
   loading: boolean;
   signUp: (email: string, password: string) => Promise<void>;
   signIn: (email: string, password: string) => Promise<void>;
+  signInWithGoogle: () => Promise<void>;
   signOut: () => Promise<void>;
-  refreshUser: () => Promise<User | null>;
+  refreshUser: () => Promise<AppUser | null>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
-  const [user, setUser] = useState<User | null>(null);
-  const [session, setSession] = useState<Session | null>(null);
+  const [user, setUser] = useState<AppUser | null>(null);
   const [loading, setLoading] = useState(true);
 
-  const ensureProfile = async (currentUser: User) => {
+  const ensureProfile = async (currentUser: AppUser) => {
     const { data: existingProfile, error: fetchError } = await supabase
       .from("profiles")
       .select("id, full_name")
@@ -34,8 +44,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     if (existingProfile) return;
 
     const fallbackName =
+      currentUser.displayName ||
       currentUser.user_metadata?.full_name ||
-      currentUser.user_metadata?.name ||
       currentUser.email?.split("@")[0] ||
       null;
 
@@ -49,79 +59,70 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }
   };
 
-  const syncAuthState = (nextSession: Session | null) => {
-    const nextUser = nextSession?.user ?? null;
-
-    setSession(nextSession);
-    setUser(nextUser);
-    setLoading(false);
-
-    if (nextUser) {
-      window.setTimeout(() => {
-        void ensureProfile(nextUser);
-      }, 0);
+  useEffect(() => {
+    if (!isFirebaseConfigured()) {
+      setLoading(false);
+      return;
     }
 
-    return nextUser;
-  };
+    const auth = getFirebaseAuth();
+    const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
+      const nextUser = firebaseUser ? mapFirebaseUser(firebaseUser) : null;
+      setUser(nextUser);
+      setLoading(false);
 
-  useEffect(() => {
-    let mounted = true;
-
-    void supabase.auth.getSession().then(({ data: { session: existingSession } }) => {
-      if (!mounted) return;
-      syncAuthState(existingSession);
+      if (nextUser) {
+        window.setTimeout(() => {
+          void ensureProfile(nextUser);
+        }, 0);
+      }
     });
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, nextSession) => {
-      if (!mounted || event === "INITIAL_SESSION") return;
-      syncAuthState(nextSession);
-    });
-
-    return () => {
-      mounted = false;
-      subscription.unsubscribe();
-    };
+    return () => unsubscribe();
   }, []);
 
   const signUp = async (email: string, password: string) => {
-    const { error } = await supabase.auth.signUp({
-      email,
-      password,
-      options: {
-        emailRedirectTo: `${window.location.origin}/verify-email`,
-        data: {
-          full_name: email.split("@")[0],
-        },
-      },
-    });
-
-    if (error) throw error;
+    const appUser = await signUpWithEmail(email, password);
+    setUser(appUser);
   };
 
   const signIn = async (email: string, password: string) => {
-    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
-
-    if (error) throw error;
-
-    if (data.user && !data.user.email_confirmed_at) {
-      await supabase.auth.signOut().catch(() => undefined);
+    const appUser = await signInWithEmail(email, password);
+    if (!appUser.emailVerified) {
+      await signOutUser();
       throw new Error("Please verify your email before signing in.");
     }
+    setUser(appUser);
+  };
+
+  const signInWithGoogleHandler = async () => {
+    const appUser = await signInWithGoogle();
+    setUser(appUser);
   };
 
   const signOut = async () => {
-    const { error } = await supabase.auth.signOut();
-    if (error) throw error;
+    await signOutUser();
+    setUser(null);
   };
 
   const refreshUser = async () => {
-    const { data: { session: currentSession } } = await supabase.auth.getSession();
-    return syncAuthState(currentSession);
+    const refreshed = await reloadCurrentUser();
+    setUser(refreshed);
+    return refreshed;
   };
 
   return (
-    <AuthContext.Provider value={{ user, session, loading, signUp, signIn, signOut, refreshUser }}>
+    <AuthContext.Provider
+      value={{
+        user,
+        loading,
+        signUp,
+        signIn,
+        signInWithGoogle: signInWithGoogleHandler,
+        signOut,
+        refreshUser,
+      }}
+    >
       {children}
     </AuthContext.Provider>
   );
