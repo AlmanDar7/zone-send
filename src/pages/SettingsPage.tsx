@@ -11,7 +11,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { getSmtpConfigError, hasUsableSmtpConfig } from "@/lib/smtpValidation";
-import { getSupabaseFunctionErrorMessage } from "@/lib/supabaseFunctionErrors";
+import { getPayloadErrorMessage, getSupabaseFunctionErrorMessage } from "@/lib/supabaseFunctionErrors";
 
 const SettingsPage = () => {
   const { user } = useAuth();
@@ -71,16 +71,23 @@ const SettingsPage = () => {
     if (limitData) setLimit(String(limitData.max_per_day));
   }, [limitData]);
 
+  const resolveUseSsl = (port: number, useSsl: boolean) => {
+    if (port === 465) return true;
+    if (port === 587 || port === 25) return false;
+    return useSsl;
+  };
+
   const upsertSmtpSettings = async () => {
+    const port = parseInt(smtp.port, 10);
     const payload = {
       user_id: user!.id,
-      host: smtp.host,
-      port: parseInt(smtp.port, 10),
-      username: smtp.username,
+      host: smtp.host.trim(),
+      port,
+      username: smtp.username.trim(),
       password: smtp.password,
-      from_name: smtp.from_name,
-      from_email: smtp.from_email,
-      use_ssl: smtp.use_ssl,
+      from_name: smtp.from_name.trim(),
+      from_email: smtp.from_email.trim() || smtp.username.trim(),
+      use_ssl: resolveUseSsl(port, smtp.use_ssl),
     };
 
     if (!hasUsableSmtpConfig({ ...payload, port: Number.isFinite(payload.port) ? payload.port : 0 })) {
@@ -106,9 +113,18 @@ const SettingsPage = () => {
     mutationFn: async () => {
       if (!testEmail.trim()) throw new Error("Enter a test recipient email");
 
+      const { data: refreshData, error: refreshError } = await supabase.auth.refreshSession();
+      const session = refreshData.session;
+      if (refreshError || !session?.access_token) {
+        throw new Error("You must be logged in to send a test email.");
+      }
+
       await upsertSmtpSettings();
 
       const sendPromise = supabase.functions.invoke("send-email", {
+        headers: {
+          Authorization: `Bearer ${session.access_token}`,
+        },
         body: {
           to: testEmail.trim(),
           subject: "Reachquix SMTP test",
@@ -121,17 +137,20 @@ const SettingsPage = () => {
         new Promise<never>((_, reject) => {
           window.setTimeout(() => {
             reject(new Error("SMTP test timed out. Check your SMTP host, port, SSL setting, username, and password."));
-          }, 15000);
+          }, 30000);
         }),
       ]);
 
       const { data, error } = result;
 
-      if (error) {
-        throw new Error(await getSupabaseFunctionErrorMessage(error, "Failed to send test email"));
+      const serverMessage = getPayloadErrorMessage(data);
+      if (serverMessage) {
+        throw new Error(serverMessage);
       }
-      if (data && typeof data === "object" && "success" in data && data.success === false) {
-        throw new Error(typeof data.error === "string" ? data.error : "SMTP test failed");
+      if (error) {
+        throw new Error(
+          await getSupabaseFunctionErrorMessage(error, "Failed to send test email", data),
+        );
       }
     },
     onSuccess: () => {
@@ -183,7 +202,21 @@ const SettingsPage = () => {
         <h3 className="font-display font-semibold text-foreground">SMTP Configuration</h3>
         <div className="grid grid-cols-2 gap-4">
           <div className="space-y-2"><Label>SMTP Host</Label><Input value={smtp.host} onChange={(e) => setSmtp({ ...smtp, host: e.target.value })} /></div>
-          <div className="space-y-2"><Label>Port</Label><Input value={smtp.port} onChange={(e) => setSmtp({ ...smtp, port: e.target.value })} /></div>
+          <div className="space-y-2">
+            <Label>Port</Label>
+            <Input
+              value={smtp.port}
+              onChange={(e) => {
+                const port = e.target.value;
+                const p = parseInt(port, 10);
+                setSmtp((prev) => ({
+                  ...prev,
+                  port,
+                  use_ssl: p === 465 ? true : p === 587 || p === 25 ? false : prev.use_ssl,
+                }));
+              }}
+            />
+          </div>
           <div className="space-y-2"><Label>Username / Email</Label><Input value={smtp.username} onChange={(e) => setSmtp({ ...smtp, username: e.target.value })} placeholder="your@email.com" /></div>
           <div className="space-y-2">
             <Label>Password</Label>
@@ -199,8 +232,11 @@ const SettingsPage = () => {
         </div>
         <div className="flex items-center gap-2">
           <Switch checked={smtp.use_ssl} onCheckedChange={(v) => setSmtp({ ...smtp, use_ssl: v })} />
-          <Label>Use SSL (port 465)</Label>
+          <Label>Use SSL (required for port 465)</Label>
         </div>
+        <p className="text-xs text-muted-foreground">
+          Use port 465 with SSL on, or port 587 with SSL off (STARTTLS). Set &quot;From email&quot; to the same address as your SMTP username.
+        </p>
         <div className="grid gap-4 md:grid-cols-[1fr_auto_auto] md:items-end">
           <div className="space-y-2">
             <Label>Test Recipient Email</Label>

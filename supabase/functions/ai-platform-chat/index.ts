@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { LovableAiError, lovableChatCompletion } from "../_shared/lovable-ai.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -19,9 +20,10 @@ serve(async (req) => {
 
     const authHeader = req.headers.get("Authorization");
     if (!authHeader) throw new Error("No authorization header");
-    const { data: { user }, error: authError } = await supabase.auth.getUser(
-      authHeader.replace("Bearer ", ""),
-    );
+    const {
+      data: { user },
+      error: authError,
+    } = await supabase.auth.getUser(authHeader.replace("Bearer ", ""));
     if (authError || !user) throw new Error("Unauthorized");
 
     const { messages, platformContext } = await req.json();
@@ -42,54 +44,21 @@ STRICT RULES:
 PLATFORM CONTEXT (JSON):
 ${JSON.stringify(ctx, null, 2)}`;
 
-    const aiResponse = await fetch(
-      "https://ai.gateway.lovable.dev/v1/chat/completions",
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${Deno.env.get("LOVABLE_API_KEY")}`,
-        },
-        body: JSON.stringify({
-          model: "google/gemini-2.5-flash",
-          messages: [
-            { role: "system", content: contextSummary },
-            ...messages,
-          ],
-          temperature: 0.4,
-        }),
-      },
-    );
+    const content = await lovableChatCompletion({
+      messages: [{ role: "system", content: contextSummary }, ...messages],
+      temperature: 0.4,
+    });
 
-    if (!aiResponse.ok) {
-      const errText = await aiResponse.text();
-      if (aiResponse.status === 429) {
-        return new Response(
-          JSON.stringify({ success: false, error: "Rate limit exceeded. Please try again shortly." }),
-          { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } },
-        );
-      }
-      if (aiResponse.status === 402) {
-        return new Response(
-          JSON.stringify({ success: false, error: "AI credits exhausted. Add credits in Workspace settings." }),
-          { status: 402, headers: { ...corsHeaders, "Content-Type": "application/json" } },
-        );
-      }
-      throw new Error(`AI API error: ${errText}`);
-    }
-
-    const aiData = await aiResponse.json();
-    const content = aiData.choices?.[0]?.message?.content || "";
-
-    return new Response(
-      JSON.stringify({ success: true, content }),
-      { headers: { ...corsHeaders, "Content-Type": "application/json" } },
-    );
-  } catch (error: any) {
-    console.error("ai-platform-chat error:", error.message);
-    return new Response(
-      JSON.stringify({ success: false, error: error.message }),
-      { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } },
-    );
+    return new Response(JSON.stringify({ success: true, content }), {
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : "Unknown error";
+    const status = error instanceof LovableAiError ? error.status : 400;
+    console.error("ai-platform-chat error:", message);
+    return new Response(JSON.stringify({ success: false, error: message }), {
+      status: status >= 400 && status < 600 ? status : 400,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
   }
 });

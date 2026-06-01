@@ -15,9 +15,9 @@ import { supabase } from "@/integrations/supabase/client";
 import type { Database } from "@/integrations/supabase/types";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import AIEmailWriter from "@/components/AIEmailWriter";
 import TemplatePreview from "@/components/TemplatePreview";
 import BlockEditor from "@/components/BlockEditor";
+import AIEmailWriter from "@/components/AIEmailWriter";
 import VisualTemplateCanvas from "@/components/VisualTemplateCanvas";
 import { DEFAULT_VISUAL_SECTION_ORDER } from "@/lib/visual-template-sections";
 import {

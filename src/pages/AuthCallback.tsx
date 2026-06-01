@@ -47,12 +47,20 @@ const AuthCallback = () => {
             refresh_token: refreshToken,
           });
           if (error) throw error;
+        } else {
+          throw new Error(
+            "No sign-in credentials returned. Add this URL in Supabase → Authentication → URL Configuration → Redirect URLs: " +
+              `${window.location.origin}/auth/callback`,
+          );
         }
 
         const session = await waitForSession();
 
         if (!session?.user) {
-          throw new Error("Authentication could not be completed.");
+          throw new Error(
+            "Authentication could not be completed. Confirm Google is enabled in Supabase and redirect URLs include " +
+              `${window.location.origin}/**`,
+          );
         }
 
         if (mounted) {

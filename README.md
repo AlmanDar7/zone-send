@@ -1,73 +1,63 @@
-# Welcome to your Lovable project
+# Reachquix (zone-send)
 
-## Project info
+Email automation platform for cold outreach, campaigns, templates, and contact management.
 
-**URL**: https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID
+## Tech stack
 
-## How can I edit this code?
+- Vite + React + TypeScript
+- Tailwind CSS + shadcn/ui
+- Supabase (auth, database, edge functions)
 
-There are several ways of editing your application.
-
-**Use Lovable**
-
-Simply visit the [Lovable Project](https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID) and start prompting.
-
-Changes made via Lovable will be committed automatically to this repo.
-
-**Use your preferred IDE**
-
-If you want to work locally using your own IDE, you can clone this repo and push changes. Pushed changes will also be reflected in Lovable.
-
-The only requirement is having Node.js & npm installed - [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating)
-
-Follow these steps:
+## Local development
 
 ```sh
-# Step 1: Clone the repository using the project's Git URL.
-git clone <YOUR_GIT_URL>
-
-# Step 2: Navigate to the project directory.
-cd <YOUR_PROJECT_NAME>
-
-# Step 3: Install the necessary dependencies.
-npm i
-
-# Step 4: Start the development server with auto-reloading and an instant preview.
+npm install
 npm run dev
 ```
 
-**Edit a file directly in GitHub**
+The dev server runs at `http://localhost:8080`.
 
-- Navigate to the desired file(s).
-- Click the "Edit" button (pencil icon) at the top right of the file view.
-- Make your changes and commit the changes.
+## Environment variables
 
-**Use GitHub Codespaces**
+Create a `.env` file in the project root:
 
-- Navigate to the main page of your repository.
-- Click on the "Code" button (green button) near the top right.
-- Select the "Codespaces" tab.
-- Click on "New codespace" to launch a new Codespace environment.
-- Edit files directly within the Codespace and commit and push your changes once you're done.
+```env
+VITE_SUPABASE_URL=your_supabase_project_url
+VITE_SUPABASE_PUBLISHABLE_KEY=your_supabase_anon_key
+```
 
-## What technologies are used for this project?
+### AI email writer (OpenAI, not Lovable)
 
-This project is built with:
+Set in Supabase → Edge Functions → Secrets:
 
-- Vite
-- TypeScript
-- React
-- shadcn-ui
-- Tailwind CSS
+| Secret | Purpose |
+|--------|---------|
+| `OPENAI_API_KEY` | Required for AI email writer |
+| `OPENAI_API_BASE` | Optional (default `https://api.openai.com/v1`) |
+| `OPENAI_MODEL` | Optional (default `gpt-4o-mini`) |
 
-## How can I deploy this project?
+```sh
+npx supabase functions deploy ai-email-writer
+```
 
-Simply open [Lovable](https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID) and click on Share -> Publish.
+## Google sign-in (Supabase)
 
-## Can I connect a custom domain to my Lovable project?
+1. **Authentication → Providers → Google** — enable and add OAuth Client ID/Secret.
+2. **Authentication → URL Configuration** — add redirect URLs:
+   - `http://localhost:8080/**`
+   - `http://127.0.0.1:8080/**`
+   - Your production URL + `/**`
+3. **Google Cloud Console** — authorized redirect URI:
+   - `https://<your-project-ref>.supabase.co/auth/v1/callback`
 
-Yes, you can!
+The app uses `supabase.auth.signInWithOAuth` and completes the flow at `/auth/callback`.
 
-To connect a domain, navigate to Project > Settings > Domains and click Connect Domain.
+## Scripts
 
-Read more here: [Setting up a custom domain](https://docs.lovable.dev/features/custom-domain#custom-domain)
+| Command | Description |
+|---------|-------------|
+| `npm run dev` | Start dev server |
+| `npm run build` | Production build |
+| `npm run preview` | Preview production build |
+| `npm run test` | Run unit tests |
+| `npm run lint` | ESLint |

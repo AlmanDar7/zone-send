@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { friendlySmtpError, sendSmtpMail } from "../_shared/smtp.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -208,7 +209,13 @@ serve(async (req) => {
         }
 
         const contactTimezone = contact.timezone || null;
-        if (shouldEnforceBusinessHours(contactTimezone) && !isBusinessHours(contactTimezone)) {
+        const scheduledMs = new Date(email.scheduled_at).getTime();
+        const dueNow = scheduledMs <= Date.now() + 2 * 60 * 1000;
+        if (
+          !dueNow &&
+          shouldEnforceBusinessHours(contactTimezone) &&
+          !isBusinessHours(contactTimezone)
+        ) {
           continue;
         }
 
@@ -254,30 +261,12 @@ serve(async (req) => {
           : `${wrapClickTracking(fullBody.replace(/\n/g, "<br>"))}${trackingPixel}`;
 
         try {
-          const { SMTPClient } = await import("https://deno.land/x/denomailer@1.6.0/mod.ts");
-          const client = new SMTPClient({
-            connection: {
-              hostname: smtp.host,
-              port: smtp.port,
-              tls: smtp.use_ssl,
-              auth: {
-                username: smtp.username,
-                password: smtp.password,
-              },
-            },
-          });
-
-          await client.send({
-            from: smtp.from_name
-              ? `${smtp.from_name} <${smtp.from_email || smtp.username}>`
-              : (smtp.from_email || smtp.username),
+          await sendSmtpMail(smtp, {
             to: contact.email,
             subject,
             content: fullBody,
             html: htmlBody,
           });
-
-          await client.close();
 
           const { error: sentUpdateError } = await supabase
             .from("email_queue")
@@ -293,20 +282,22 @@ serve(async (req) => {
               .update({ sent_today: (limits.sent_today || 0) + 1 })
               .eq("user_id", campaign.user_id);
           }
-        } catch (sendError: any) {
-          console.error(`Failed to send queue ${email.id} to ${contact.email}:`, sendError?.message || sendError);
+        } catch (sendError: unknown) {
+          const raw = sendError instanceof Error ? sendError.message : String(sendError);
+          const message = friendlySmtpError(raw);
+          console.error(`Failed to send queue ${email.id} to ${contact.email}:`, message);
           totalFailed += 1;
 
           await supabase
             .from("email_queue")
-            .update({ status: "failed", error_message: sendError?.message || "Unknown send error" })
+            .update({ status: "failed", error_message: message })
             .eq("id", email.id);
 
-          const errorText = String(sendError?.message || "").toLowerCase();
+          const errorText = message.toLowerCase();
           if (errorText.includes("550") || errorText.includes("bounce") || errorText.includes("invalid")) {
             await supabase
               .from("contacts")
-              .update({ status: "Bounced", bounce_reason: sendError?.message || "Bounce detected" })
+              .update({ status: "Bounced", bounce_reason: message })
               .eq("id", contact.id);
           }
         }

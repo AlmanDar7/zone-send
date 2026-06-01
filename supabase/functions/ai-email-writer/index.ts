@@ -1,9 +1,11 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { AiApiError, chatCompletion } from "../_shared/openai.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
+  "Access-Control-Allow-Headers":
+    "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
 serve(async (req) => {
@@ -16,12 +18,13 @@ serve(async (req) => {
 
     const authHeader = req.headers.get("Authorization");
     if (!authHeader) throw new Error("No authorization header");
-    const { data: { user }, error: authError } = await supabase.auth.getUser(authHeader.replace("Bearer ", ""));
+    const {
+      data: { user },
+      error: authError,
+    } = await supabase.auth.getUser(authHeader.replace("Bearer ", ""));
     if (authError || !user) throw new Error("Unauthorized");
 
     const { prompt, type, tone } = await req.json();
-    // type: 'subject' | 'body' | 'full'
-    // tone: 'professional' | 'friendly' | 'casual' | 'urgent'
 
     const systemPrompt = `You are an expert cold email copywriter. You write high-converting outreach emails that are personalized, concise, and drive action.
 
@@ -42,37 +45,23 @@ Rules:
       userPrompt = `Write a complete cold email (subject line + body) for the following context. Use merge tags where appropriate. Return as JSON with "subject" and "body" keys.\n\nContext: ${prompt}\nTone: ${tone || "professional"}`;
     }
 
-    const aiResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Authorization": `Bearer ${Deno.env.get("LOVABLE_API_KEY")}`,
-      },
-      body: JSON.stringify({
-        model: "google/gemini-2.5-flash",
-        messages: [
-          { role: "system", content: systemPrompt },
-          { role: "user", content: userPrompt },
-        ],
-        temperature: 0.8,
-      }),
+    const content = await chatCompletion({
+      messages: [
+        { role: "system", content: systemPrompt },
+        { role: "user", content: userPrompt },
+      ],
+      temperature: 0.8,
     });
-
-    if (!aiResponse.ok) {
-      const errText = await aiResponse.text();
-      throw new Error(`AI API error: ${errText}`);
-    }
-
-    const aiData = await aiResponse.json();
-    const content = aiData.choices?.[0]?.message?.content || "";
 
     return new Response(JSON.stringify({ success: true, content }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
-  } catch (error: any) {
-    console.error("AI writer error:", error.message);
-    return new Response(JSON.stringify({ success: false, error: error.message }), {
-      status: 400,
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : "Unknown error";
+    const status = error instanceof AiApiError ? error.status : 400;
+    console.error("AI writer error:", message);
+    return new Response(JSON.stringify({ success: false, error: message }), {
+      status: status >= 400 && status < 600 ? status : 400,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
   }

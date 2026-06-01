@@ -1241,12 +1241,25 @@ const Step3Subject = ({
         },
       });
       if (error) throw error;
-      return (data as { subject?: string; content?: string })?.subject || (data as { content?: string })?.content || "";
+      if (data && typeof data === "object" && "success" in data && data.success === false) {
+        throw new Error(typeof data.error === "string" ? data.error : "AI suggestion failed");
+      }
+      const content = (data as { content?: string })?.content || "";
+      try {
+        const cleaned = content.replace(/```json\n?/g, "").replace(/```\n?/g, "").trim();
+        const subjects = JSON.parse(cleaned);
+        if (Array.isArray(subjects) && subjects.length > 0) return String(subjects[0]);
+      } catch {
+        // use raw text
+      }
+      return content.split("\n")[0] || "";
     },
     onSuccess: (s: string) => {
       if (s) onSubject(s.slice(0, 120));
     },
-    onError: () => toast.error("AI suggestion failed"),
+    onError: (err: unknown) => {
+      toast.error(err instanceof Error ? err.message : "AI suggestion failed");
+    },
   });
 
   return (

@@ -33,8 +33,9 @@ const AIEmailWriter = ({ onInsert, onInsertSubject }: AIEmailWriterProps) => {
       if (error) throw error;
       if (!data.success) throw new Error(data.error);
       setResult(data.content);
-    } catch (err: any) {
-      toast.error(err.message || "Failed to generate");
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "Failed to generate";
+      toast.error(message);
     } finally {
       setLoading(false);
     }
@@ -48,7 +49,6 @@ const AIEmailWriter = ({ onInsert, onInsertSubject }: AIEmailWriterProps) => {
 
   const handleInsert = () => {
     if (type === "full") {
-      // Try to parse JSON for subject+body
       try {
         const cleaned = result.replace(/```json\n?/g, "").replace(/```\n?/g, "").trim();
         const parsed = JSON.parse(cleaned);
@@ -63,7 +63,6 @@ const AIEmailWriter = ({ onInsert, onInsertSubject }: AIEmailWriterProps) => {
       onInsert(result);
       toast.success("Body inserted!");
     } else if (type === "subject" && onInsertSubject) {
-      // Try to parse JSON array for subjects
       try {
         const cleaned = result.replace(/```json\n?/g, "").replace(/```\n?/g, "").trim();
         const subjects = JSON.parse(cleaned);
@@ -107,7 +106,7 @@ const AIEmailWriter = ({ onInsert, onInsertSubject }: AIEmailWriterProps) => {
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-2">
               <Label>Generate</Label>
-              <Select value={type} onValueChange={(v: any) => setType(v)}>
+              <Select value={type} onValueChange={(v: "subject" | "body" | "full") => setType(v)}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="full">Full Email</SelectItem>
@@ -130,7 +129,17 @@ const AIEmailWriter = ({ onInsert, onInsertSubject }: AIEmailWriterProps) => {
             </div>
           </div>
           <Button onClick={generate} disabled={loading || !prompt.trim()} className="w-full">
-            {loading ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Generating...</> : <><Sparkles className="w-4 h-4 mr-2" />Generate</>}
+            {loading ? (
+              <>
+                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                Generating...
+              </>
+            ) : (
+              <>
+                <Sparkles className="w-4 h-4 mr-2" />
+                Generate
+              </>
+            )}
           </Button>
           {result && (
             <div className="space-y-3">
