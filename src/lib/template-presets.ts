@@ -3,7 +3,10 @@ export type TemplateFormat = "plain" | "visual";
 export type VisualTemplatePresetId =
   | "lead-magnet"
   | "product-showcase"
-  | "newsletter-digest";
+  | "newsletter-digest"
+  | "popup-form"
+  | "inline-form"
+  | "full-page-form";
 
 import type { VisualSectionId } from "@/lib/visual-template-sections";
 import { buildLeadMagnetHtmlFromOrder } from "@/lib/visual-template-sections";
@@ -24,12 +27,18 @@ export type VisualTemplateConfig = {
   footerNote: string;
   accentColor: string;
   backgroundColor: string;
+  // Form Settings
+  formShowNameField: boolean;
+  formNamePlaceholder: string;
+  formEmailPlaceholder: string;
+  formSubmitLabel: string;
 };
 
 export type VisualTemplatePreset = {
   id: VisualTemplatePresetId;
   name: string;
   description: string;
+  category: "email" | "form";
   defaultSubject: string;
   defaultType: string;
   createConfig: () => VisualTemplateConfig;
@@ -43,7 +52,9 @@ export const sampleTemplateVariables = {
 
 export type TemplateVariableValues = typeof sampleTemplateVariables;
 
-export const replaceTemplateVariables = (text: string, overrides?: Partial<TemplateVariableValues>) => {
+export const replaceTemplateVariables = (text: string | undefined | null, overrides?: Partial<TemplateVariableValues>) => {
+  if (!text) return "";
+  
   const values: TemplateVariableValues = {
     ...sampleTemplateVariables,
     ...overrides,
@@ -54,15 +65,15 @@ export const replaceTemplateVariables = (text: string, overrides?: Partial<Templ
   });
 };
 
-const escapeHtml = (value: string) =>
-  value
+const escapeHtml = (value: string | undefined | null) =>
+  (value || "")
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;")
     .replace(/"/g, "&quot;")
     .replace(/'/g, "&#39;");
 
-const renderText = (value: string) => replaceTemplateVariables(escapeHtml(value)).replace(/\n/g, "<br>");
+const renderText = (value: string | undefined | null) => replaceTemplateVariables(escapeHtml(value)).replace(/\n/g, "<br>");
 
 const createLeadMagnetConfig = (): VisualTemplateConfig => ({
   presetId: "lead-magnet",
@@ -81,6 +92,10 @@ const createLeadMagnetConfig = (): VisualTemplateConfig => ({
   footerNote: "You are receiving this because you requested resources from Ava Studio.",
   accentColor: "#c7d8cf",
   backgroundColor: "#f8f6f2",
+  formShowNameField: true,
+  formNamePlaceholder: "First Name",
+  formEmailPlaceholder: "Email Address",
+  formSubmitLabel: "Subscribe",
 });
 
 const createProductShowcaseConfig = (): VisualTemplateConfig => ({
@@ -100,6 +115,10 @@ const createProductShowcaseConfig = (): VisualTemplateConfig => ({
   footerNote: "Questions? Reply to this email and our team will help.",
   accentColor: "#d7c7bb",
   backgroundColor: "#f6f0ea",
+  formShowNameField: true,
+  formNamePlaceholder: "First Name",
+  formEmailPlaceholder: "Email Address",
+  formSubmitLabel: "Subscribe",
 });
 
 const createNewsletterDigestConfig = (): VisualTemplateConfig => ({
@@ -119,6 +138,76 @@ const createNewsletterDigestConfig = (): VisualTemplateConfig => ({
   footerNote: "You are subscribed to Weekly Brief. Update your preferences anytime.",
   accentColor: "#bfd4d9",
   backgroundColor: "#f4f8f9",
+  formShowNameField: false,
+  formNamePlaceholder: "First Name",
+  formEmailPlaceholder: "Email Address",
+  formSubmitLabel: "Subscribe",
+});
+
+const createPopupFormConfig = (): VisualTemplateConfig => ({
+  presetId: "popup-form",
+  brandName: "Join Us",
+  eyebrow: "Newsletter",
+  headline: "Get 15% off your first order",
+  subheadline: "Join our mailing list to receive exclusive offers and updates.",
+  body: "",
+  ctaText: "Close",
+  ctaUrl: "#",
+  heroImageUrl: "https://images.unsplash.com/photo-1556905055-8f358a7a47b2?auto=format&fit=crop&w=900&q=80",
+  secondaryTitle: "",
+  secondaryBody: "",
+  footerNote: "We respect your privacy.",
+  accentColor: "#111827",
+  backgroundColor: "#ffffff",
+  sectionOrder: ["hero", "headline", "subheadline", "form", "footer"],
+  formShowNameField: true,
+  formNamePlaceholder: "First Name",
+  formEmailPlaceholder: "Email Address",
+  formSubmitLabel: "Subscribe Now",
+});
+
+const createInlineFormConfig = (): VisualTemplateConfig => ({
+  presetId: "inline-form",
+  brandName: "Stay Updated",
+  eyebrow: "Updates",
+  headline: "Subscribe to our newsletter",
+  subheadline: "Get the latest news delivered directly to your inbox.",
+  body: "",
+  ctaText: "Close",
+  ctaUrl: "#",
+  heroImageUrl: "https://images.unsplash.com/photo-1499951360447-b19be8fe80f5?auto=format&fit=crop&w=900&q=80",
+  secondaryTitle: "",
+  secondaryBody: "",
+  footerNote: "No spam, ever.",
+  accentColor: "#3b82f6",
+  backgroundColor: "#f8fafc",
+  sectionOrder: ["eyebrow", "headline", "subheadline", "form", "footer"],
+  formShowNameField: false,
+  formNamePlaceholder: "First Name",
+  formEmailPlaceholder: "Email Address",
+  formSubmitLabel: "Join Now",
+});
+
+const createFullPageFormConfig = (): VisualTemplateConfig => ({
+  presetId: "full-page-form",
+  brandName: "Waitlist",
+  eyebrow: "Early Access",
+  headline: "Join the Waitlist",
+  subheadline: "Be the first to know when we launch our new platform.",
+  body: "Our new platform is launching soon. Join the waitlist to secure your spot and get exclusive early access benefits.",
+  ctaText: "Close",
+  ctaUrl: "#",
+  heroImageUrl: "https://images.unsplash.com/photo-1451187580459-43490279c0fa?auto=format&fit=crop&w=900&q=80",
+  secondaryTitle: "Why join?",
+  secondaryBody: "Early adopters get 50% off their first year, plus a free onboarding session with our team.",
+  footerNote: "By joining, you agree to our terms of service.",
+  accentColor: "#059669",
+  backgroundColor: "#f0fdf4",
+  sectionOrder: ["brand", "hero", "headline", "subheadline", "form", "secondary", "footer"],
+  formShowNameField: true,
+  formNamePlaceholder: "Your Name",
+  formEmailPlaceholder: "Your best email",
+  formSubmitLabel: "Join the Waitlist",
 });
 
 export const visualTemplatePresets: VisualTemplatePreset[] = [
@@ -126,6 +215,7 @@ export const visualTemplatePresets: VisualTemplatePreset[] = [
     id: "lead-magnet",
     name: "Lead Magnet Download",
     description: "A minimal, editorial-style email for guides, freebies, and welcome downloads.",
+    category: "email",
     defaultSubject: "{{FirstName}}, your free guide is ready",
     defaultType: "Initial",
     createConfig: createLeadMagnetConfig,
@@ -134,6 +224,7 @@ export const visualTemplatePresets: VisualTemplatePreset[] = [
     id: "product-showcase",
     name: "Product Showcase",
     description: "A more promotional visual layout for launches, collections, and featured offers.",
+    category: "email",
     defaultSubject: "{{FirstName}}, take a look at our latest release",
     defaultType: "Initial",
     createConfig: createProductShowcaseConfig,
@@ -142,9 +233,37 @@ export const visualTemplatePresets: VisualTemplatePreset[] = [
     id: "newsletter-digest",
     name: "Newsletter Digest",
     description: "A polished update template for weekly roundups, stories, and curated content.",
+    category: "email",
     defaultSubject: "{{FirstName}}, here is this week's update",
     defaultType: "Follow-up 1",
     createConfig: createNewsletterDigestConfig,
+  },
+  {
+    id: "popup-form",
+    name: "Popup Form",
+    description: "A high-converting popup form with an image and offer.",
+    category: "form",
+    defaultSubject: "",
+    defaultType: "Initial",
+    createConfig: createPopupFormConfig,
+  },
+  {
+    id: "inline-form",
+    name: "Inline Form",
+    description: "A clean, horizontal form designed to be embedded within articles or blog posts.",
+    category: "form",
+    defaultSubject: "",
+    defaultType: "Initial",
+    createConfig: createInlineFormConfig,
+  },
+  {
+    id: "full-page-form",
+    name: "Full Page Form",
+    description: "A standalone landing page form perfect for link-in-bio or dedicated campaigns.",
+    category: "form",
+    defaultSubject: "",
+    defaultType: "Initial",
+    createConfig: createFullPageFormConfig,
   },
 ];
 

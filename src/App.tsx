@@ -14,7 +14,8 @@ const VerifyEmail = React.lazy(() => import("@/pages/VerifyEmail"));
 const Dashboard = React.lazy(() => import("@/pages/Dashboard"));
 const Contacts = React.lazy(() => import("@/pages/Contacts"));
 const Campaigns = React.lazy(() => import("@/pages/Campaigns"));
-const Templates = React.lazy(() => import("@/pages/Templates"));
+const EmailBuilder = React.lazy(() => import("@/pages/EmailBuilder"));
+const FormBuilder = React.lazy(() => import("@/pages/FormBuilder"));
 const Analytics = React.lazy(() => import("@/pages/Analytics"));
 const SettingsPage = React.lazy(() => import("@/pages/SettingsPage"));
 const EmailQueue = React.lazy(() => import("@/pages/EmailQueue"));
@@ -26,6 +27,8 @@ const Emails = React.lazy(() => import("@/pages/Emails"));
 const Forms = React.lazy(() => import("@/pages/Forms"));
 const Workflows = React.lazy(() => import("@/pages/Workflows"));
 const CampaignWizard = React.lazy(() => import("@/pages/CampaignWizard"));
+const TemplateGallery = React.lazy(() => import("@/pages/TemplateGallery"));
+const FormPublishWizard = React.lazy(() => import("@/pages/FormPublishWizard"));
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -60,7 +63,11 @@ const App = () => (
                 <Route path="/campaigns" element={<Campaigns />} />
                 <Route path="/campaigns/new" element={<CampaignWizard />} />
                 <Route path="/campaigns/:id/report" element={<CampaignReport />} />
-                <Route path="/templates" element={<Templates />} />
+                <Route path="/forms/templates" element={<TemplateGallery category="form" />} />
+                <Route path="/forms/:id/publish" element={<FormPublishWizard />} />
+                <Route path="/emails/templates" element={<TemplateGallery category="email" />} />
+                <Route path="/forms/builder" element={<FormBuilder />} />
+                <Route path="/emails/builder" element={<EmailBuilder />} />
                 <Route path="/analytics" element={<Analytics />} />
                 <Route path="/email-queue" element={<EmailQueue />} />
                 <Route path="/profile" element={<Profile />} />

@@ -29,6 +29,7 @@ import {
   Trash2,
   Monitor,
   Smartphone,
+  TextCursorInput,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { VisualTemplateConfig, TemplateVariableValues } from "@/lib/template-presets";
@@ -54,6 +55,8 @@ type Props = {
   ) => void;
   /** Sidebar with block-style add controls (campaign wizard) */
   layout?: "compact" | "sidebar";
+  hideCanvas?: boolean;
+  hideSidebar?: boolean;
 };
 
 const PALETTE_ICONS: Record<VisualSectionId, ReactNode> = {
@@ -64,6 +67,7 @@ const PALETTE_ICONS: Record<VisualSectionId, ReactNode> = {
   subheadline: <Type className="h-4 w-4" />,
   body: <Type className="h-4 w-4" />,
   cta: <MousePointerClick className="h-4 w-4" />,
+  form: <TextCursorInput className="h-4 w-4" />,
   secondary: <LayoutList className="h-4 w-4" />,
   footer: <PanelBottom className="h-4 w-4" />,
   style: <Palette className="h-4 w-4" />,
@@ -75,6 +79,8 @@ const VisualTemplateCanvas = ({
   onConfigChange,
   onUpdateField,
   layout = "compact",
+  hideCanvas = false,
+  hideSidebar = false,
 }: Props) => {
   const [selectedId, setSelectedId] = useState<VisualSectionId | null>(null);
   const [editingId, setEditingId] = useState<VisualSectionId | null>(null);
@@ -231,9 +237,9 @@ const VisualTemplateCanvas = ({
   return (
     <>
       {sidebar ? (
-        <div className="grid gap-4 lg:grid-cols-[minmax(200px,240px)_minmax(0,1fr)] lg:items-start">
-          {sidebarPanel}
-          <div className="min-w-0 space-y-3">{canvas}</div>
+        <div className={cn("grid gap-4", !hideSidebar && !hideCanvas && "lg:grid-cols-[minmax(200px,240px)_minmax(0,1fr)] lg:items-start")}>
+          {!hideSidebar && sidebarPanel}
+          {!hideCanvas && <div className="min-w-0 space-y-3">{canvas}</div>}
         </div>
       ) : (
         <div className="space-y-3">
@@ -423,6 +429,27 @@ const SectionPreview = ({
           >
             {t(config.ctaText)}
           </span>
+        </div>
+      );
+    case "form":
+      return (
+        <div className="px-6 pb-6 pt-2">
+          <form className="space-y-4" onSubmit={(e) => e.preventDefault()}>
+            {config.formShowNameField && (
+              <div className="rounded-xl border border-border bg-background px-4 py-3 text-sm text-muted-foreground shadow-sm">
+                {t(config.formNamePlaceholder || "First Name")}
+              </div>
+            )}
+            <div className="rounded-xl border border-border bg-background px-4 py-3 text-sm text-muted-foreground shadow-sm">
+              {t(config.formEmailPlaceholder || "Email Address")}
+            </div>
+            <div
+              className="rounded-xl px-6 py-3.5 text-center text-sm font-semibold text-primary-foreground shadow-md"
+              style={{ backgroundColor: config.accentColor }}
+            >
+              {t(config.formSubmitLabel || "Subscribe")}
+            </div>
+          </form>
         </div>
       );
     case "secondary":

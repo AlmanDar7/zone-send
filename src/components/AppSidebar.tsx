@@ -43,8 +43,9 @@ const AppSidebar = ({ isExpanded, onToggle, mobileOpen, setMobileOpen }: AppSide
     const isActive =
       location.pathname === item.to ||
       (item.to === "/campaigns" && location.pathname.startsWith("/campaigns")) ||
-      (item.to === "/emails" && location.pathname.startsWith("/templates")) ||
-      (item.to === "/contacts" && location.pathname.startsWith("/audience"));
+      (item.to === "/emails" && location.pathname.startsWith("/emails")) ||
+      (item.to === "/forms" && location.pathname.startsWith("/forms")) ||
+      (item.to === "/contacts" && (location.pathname.startsWith("/contacts") || location.pathname.startsWith("/audience")));
     return (
       <NavLink
         key={item.to}

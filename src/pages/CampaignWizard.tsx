@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   ArrowLeft, ArrowRight, Check, Search, Users, Calendar as CalendarIcon,
@@ -48,7 +48,7 @@ import {
 import { DEFAULT_VISUAL_SECTION_ORDER } from "@/lib/visual-template-sections";
 import { isEmailContent } from "@/lib/content-types";
 
-type EmailRow = Database["public"]["Tables"]["email_templates"]["Row"];
+type EmailRow = Database["public"]["Tables"]["email_templates"]["Row"] & { preview_text?: string | null };
 type ContactRow = Database["public"]["Tables"]["contacts"]["Row"];
 type FolderRow = Database["public"]["Tables"]["contact_folders"]["Row"];
 
@@ -81,7 +81,9 @@ const toVisualConfig = (t: EmailRow): VisualTemplateConfig => {
 const CampaignWizard = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
-  const [step, setStep] = useState(1);
+  const [searchParams] = useSearchParams();
+  const initialStep = searchParams.get("templateId") ? 2 : 1;
+  const [step, setStep] = useState(initialStep);
 
   // Step 1
   const [selectedTemplate, setSelectedTemplate] = useState<EmailRow | null>(null);
@@ -142,6 +144,19 @@ const CampaignWizard = () => {
     },
     enabled: !!user,
   });
+
+  useEffect(() => {
+    const templateId = searchParams.get("templateId");
+    if (templateId && templates.length > 0 && !selectedTemplate) {
+      const found = templates.find((t) => t.id === templateId);
+      if (found) {
+        setSelectedTemplate(found);
+        setDesignConfig(toVisualConfig(found));
+        setSubject(found.subject || "");
+        setPreviewText(found.preview_text || "");
+      }
+    }
+  }, [searchParams, templates, selectedTemplate]);
 
   const savedEmailTemplates = useMemo(
     () =>

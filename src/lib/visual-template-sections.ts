@@ -14,6 +14,11 @@ export type VisualTemplateConfigSlice = {
   footerNote: string;
   accentColor: string;
   backgroundColor: string;
+  // Form Settings
+  formShowNameField: boolean;
+  formNamePlaceholder: string;
+  formEmailPlaceholder: string;
+  formSubmitLabel: string;
 };
 
 export type VisualSectionId =
@@ -24,6 +29,7 @@ export type VisualSectionId =
   | "subheadline"
   | "body"
   | "cta"
+  | "form"
   | "secondary"
   | "footer"
   | "style";
@@ -51,6 +57,7 @@ export const visualSectionMeta: Record<
   subheadline: { label: "Subheadline", hint: "Supporting line under the title" },
   body: { label: "Main copy", hint: "Email body text" },
   cta: { label: "Button", hint: "Call-to-action label and link" },
+  form: { label: "Form", hint: "Opt-in form inputs" },
   secondary: { label: "Extra section", hint: "Bonus box title and text" },
   footer: { label: "Footer", hint: "Legal or unsubscribe note" },
   style: { label: "Colors", hint: "Accent and background colors" },
@@ -65,6 +72,7 @@ export const VISUAL_SECTION_PALETTE: VisualSectionId[] = [
   "subheadline",
   "body",
   "cta",
+  "form",
   "secondary",
   "footer",
 ];
@@ -77,6 +85,7 @@ export const visualSectionBuilderLabel: Record<VisualSectionId, string> = {
   subheadline: "Subheading",
   body: "Text",
   cta: "Button",
+  form: "Form",
   secondary: "Info box",
   footer: "Footer",
   style: "Colors",
@@ -117,15 +126,15 @@ export const normalizeSectionOrder = (
   return normalized.filter((id) => id !== "style");
 };
 
-const escapeHtml = (value: string) =>
-  value
+const escapeHtml = (value: string | undefined | null) =>
+  (value || "")
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;")
     .replace(/"/g, "&quot;")
     .replace(/'/g, "&#39;");
 
-const renderText = (value: string) => escapeHtml(value).replace(/\n/g, "<br>");
+const renderText = (value: string | undefined | null) => escapeHtml(value).replace(/\n/g, "<br>");
 
 export const buildLeadMagnetHtmlFromOrder = (config: VisualTemplateConfigSlice) => {
   const order = normalizeSectionOrder(config.sectionOrder);
@@ -161,6 +170,28 @@ export const buildLeadMagnetHtmlFromOrder = (config: VisualTemplateConfigSlice) 
             ${renderText(config.ctaText)}
           </a>
         </div>`,
+    form: `
+        <form style="margin-bottom:22px;text-align:left;">
+          ${
+            config.formShowNameField
+              ? `<div style="margin-bottom:12px;">
+                  <input type="text" placeholder="${escapeHtml(
+                    config.formNamePlaceholder
+                  )}" style="width:100%;padding:14px 16px;border:1px solid #d1d5db;border-radius:12px;font-family:Arial,sans-serif;font-size:15px;box-sizing:border-box;" required />
+                </div>`
+              : ""
+          }
+          <div style="margin-bottom:16px;">
+            <input type="email" placeholder="${escapeHtml(
+              config.formEmailPlaceholder
+            )}" style="width:100%;padding:14px 16px;border:1px solid #d1d5db;border-radius:12px;font-family:Arial,sans-serif;font-size:15px;box-sizing:border-box;" required />
+          </div>
+          <button type="submit" style="width:100%;background:${
+            config.accentColor
+          };color:#1f2937;border:none;padding:16px;border-radius:12px;font-family:Arial,sans-serif;font-size:15px;font-weight:700;cursor:pointer;">
+            ${renderText(config.formSubmitLabel)}
+          </button>
+        </form>`,
     secondary: `
         <div style="background:#f9fafb;border-radius:18px;padding:18px 20px;">
           <div style="font-family:Arial,sans-serif;font-size:12px;letter-spacing:0.14em;text-transform:uppercase;color:#6b7280;margin-bottom:10px;">
@@ -184,6 +215,7 @@ export const buildLeadMagnetHtmlFromOrder = (config: VisualTemplateConfigSlice) 
     "subheadline",
     "body",
     "cta",
+    "form",
     "secondary",
   ]);
 

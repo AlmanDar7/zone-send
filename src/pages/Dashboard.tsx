@@ -86,7 +86,7 @@ const Dashboard = () => {
     queryFn: async () => {
       const [sentRes, eventsRes] = await Promise.all([
         supabase.from("email_queue").select("*", { count: "exact", head: true }).eq("status", "sent"),
-        supabase.from("email_events").select("*"),
+        supabase.from("email_events").select("contact_id, event_type"),
       ]);
       const totalSent = sentRes.count || 0;
       const events = eventsRes.data || [];
@@ -130,7 +130,8 @@ const Dashboard = () => {
     queryKey: ["dashboard-daily", user?.id],
     queryFn: async () => {
       const days = 7;
-      const result = [];
+      const promises = [];
+      
       for (let i = days - 1; i >= 0; i--) {
         const date = new Date();
         date.setDate(date.getDate() - i);
@@ -139,20 +140,21 @@ const Dashboard = () => {
         nextDay.setDate(nextDay.getDate() + 1);
         const nextDayStr = nextDay.toISOString().split("T")[0];
 
-        const [sentRes, repliesRes] = await Promise.all([
-          supabase.from("email_queue").select("*", { count: "exact", head: true })
-            .eq("status", "sent").gte("sent_at", dayStr).lt("sent_at", nextDayStr),
-          supabase.from("email_events").select("*", { count: "exact", head: true })
-            .eq("event_type", "open").gte("created_at", dayStr).lt("created_at", nextDayStr),
-        ]);
-
-        result.push({
-          date: date.toLocaleDateString("en", { weekday: "short" }),
-          sent: sentRes.count || 0,
-          opens: repliesRes.count || 0,
-        });
+        promises.push(
+          Promise.all([
+            supabase.from("email_queue").select("*", { count: "exact", head: true })
+              .eq("status", "sent").gte("sent_at", dayStr).lt("sent_at", nextDayStr),
+            supabase.from("email_events").select("*", { count: "exact", head: true })
+              .eq("event_type", "open").gte("created_at", dayStr).lt("created_at", nextDayStr),
+          ]).then(([sentRes, repliesRes]) => ({
+            date: date.toLocaleDateString("en", { weekday: "short" }),
+            sent: sentRes.count || 0,
+            opens: repliesRes.count || 0,
+          }))
+        );
       }
-      return result;
+      
+      return await Promise.all(promises);
     },
     enabled: !!user,
   });
@@ -170,7 +172,7 @@ const Dashboard = () => {
       {/* Quick Actions */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         {[
-          { icon: Plus, label: "Create Email", desc: "Design a new email template", path: "/templates?new=1" },
+          { icon: Plus, label: "Create Email", desc: "Design a new email template", path: "/emails/templates" },
           { icon: Megaphone, label: "New Campaign", desc: "Send to your audience", path: "/campaigns/new" },
           { icon: UserPlus, label: "Add Contacts", desc: "Grow your audience", path: "/contacts" },
         ].map((action) => (

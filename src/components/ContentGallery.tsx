@@ -65,7 +65,7 @@ const galleryConfig: Record<
   emails: {
     title: "My emails",
     queryKey: "emails",
-    newUrl: "/templates?new=1",
+    newUrl: "/emails/templates",
     emptyIcon: Mail,
     emptyTitle: "No emails yet",
     emptyDescription:
@@ -84,7 +84,7 @@ const galleryConfig: Record<
   forms: {
     title: "My forms",
     queryKey: "forms",
-    newUrl: "/templates?new=1&category=form",
+    newUrl: "/forms/templates",
     emptyIcon: FileText,
     emptyTitle: "No forms yet",
     emptyDescription:
@@ -316,7 +316,7 @@ const ContentGallery = ({ variant }: ContentGalleryProps) => {
                         item={item}
                         isForms={isForms}
                         onPreview={() => setPreviewItem(item)}
-                        onEdit={() => navigate(`/templates?edit=${item.id}`)}
+                        onEdit={() => navigate(`${isForms ? '/forms/builder' : '/emails/builder'}?edit=${item.id}`)}
                         onDuplicate={() => duplicate.mutate(item)}
                         onDelete={() => {
                           if (confirm(`Delete "${item.name}"?`)) remove.mutate(item.id);

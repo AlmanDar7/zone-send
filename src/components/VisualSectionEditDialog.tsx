@@ -131,7 +131,50 @@ const VisualSectionEditDialog = ({
                 <Input
                   value={config.ctaUrl}
                   onChange={(e) => onUpdate("ctaUrl", e.target.value)}
-                  placeholder="https://"
+                  placeholder="https://..."
+                />
+              </Field>
+            </>
+          )}
+
+          {sectionId === "form" && (
+            <>
+              <div className="flex items-center justify-between rounded-lg border border-border p-3 shadow-sm">
+                <Label htmlFor="showName" className="flex flex-col gap-1 cursor-pointer">
+                  <span className="font-medium">First Name field</span>
+                  <span className="text-xs text-muted-foreground font-normal">Ask subscribers for their name</span>
+                </Label>
+                <div 
+                  className={`w-10 h-6 flex items-center rounded-full p-1 cursor-pointer transition-colors ${config.formShowNameField ? 'bg-primary' : 'bg-muted'}`}
+                  onClick={() => onUpdate("formShowNameField", !config.formShowNameField)}
+                >
+                  <div className={`bg-white w-4 h-4 rounded-full shadow-sm transform transition-transform ${config.formShowNameField ? 'translate-x-4' : ''}`} />
+                </div>
+              </div>
+
+              {config.formShowNameField && (
+                <Field label="Name placeholder">
+                  <Input
+                    value={config.formNamePlaceholder}
+                    onChange={(e) => onUpdate("formNamePlaceholder", e.target.value)}
+                    placeholder="First Name"
+                  />
+                </Field>
+              )}
+
+              <Field label="Email placeholder">
+                <Input
+                  value={config.formEmailPlaceholder}
+                  onChange={(e) => onUpdate("formEmailPlaceholder", e.target.value)}
+                  placeholder="Email Address"
+                />
+              </Field>
+              
+              <Field label="Submit button text">
+                <Input
+                  value={config.formSubmitLabel}
+                  onChange={(e) => onUpdate("formSubmitLabel", e.target.value)}
+                  placeholder="Subscribe"
                 />
               </Field>
             </>
