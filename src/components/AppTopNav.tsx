@@ -69,7 +69,7 @@ const AppTopNav = () => {
 
   return (
     <header className="sticky top-0 z-50 border-b border-border bg-card">
-      <div className="mx-auto grid h-16 max-w-[1400px] grid-cols-[1fr_auto_1fr] items-center px-4 sm:px-6 lg:px-10">
+      <div className="grid h-16 w-full grid-cols-[1fr_auto_1fr] items-center px-4 sm:px-6 lg:px-10">
         <AppLogo className="justify-self-start" size="sm" />
 
         <nav className="hidden items-center justify-center gap-10 md:flex lg:gap-14">

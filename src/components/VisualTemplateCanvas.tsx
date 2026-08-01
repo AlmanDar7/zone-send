@@ -27,6 +27,8 @@ import {
   PanelBottom,
   LayoutList,
   Trash2,
+  Monitor,
+  Smartphone,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { VisualTemplateConfig, TemplateVariableValues } from "@/lib/template-presets";
@@ -76,6 +78,7 @@ const VisualTemplateCanvas = ({
 }: Props) => {
   const [selectedId, setSelectedId] = useState<VisualSectionId | null>(null);
   const [editingId, setEditingId] = useState<VisualSectionId | null>(null);
+  const [previewMode, setPreviewMode] = useState<"desktop" | "mobile">("desktop");
   const sidebar = layout === "sidebar";
 
   const sectionOrder = useMemo(
@@ -120,8 +123,9 @@ const VisualTemplateCanvas = ({
   const canvas = (
     <div
       className={cn(
-        "overflow-hidden rounded-2xl border border-border p-4 sm:p-6",
+        "overflow-hidden rounded-2xl border border-border p-4 sm:p-6 transition-all duration-300",
         sidebar ? "min-h-[420px]" : "",
+        previewMode === "mobile" ? "mx-auto max-w-[375px] shadow-sm border-[6px] border-muted" : "w-full"
       )}
       style={{ backgroundColor: config.backgroundColor }}
     >
@@ -132,7 +136,7 @@ const VisualTemplateCanvas = ({
       ) : (
         <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
           <SortableContext items={sectionOrder} strategy={verticalListSortingStrategy}>
-            <div className="mx-auto max-w-md space-y-0">
+            <div className={cn("mx-auto space-y-0", previewMode === "mobile" ? "max-w-full" : "max-w-md")}>
               {sectionOrder.map((sectionId) => (
                 <SortableSection
                   key={sectionId}
@@ -238,14 +242,32 @@ const VisualTemplateCanvas = ({
               <span className="font-medium text-foreground">Double-click</span> a section to edit ·{" "}
               <span className="font-medium text-foreground">Drag</span> the handle to reorder
             </p>
-            <button
-              type="button"
-              onClick={() => openEditor("style")}
-              className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs text-muted-foreground hover:bg-background hover:text-foreground"
-            >
-              <Palette className="h-3.5 w-3.5" />
-              Colors
-            </button>
+            <div className="flex items-center gap-2">
+              <div className="flex items-center rounded-md border border-border bg-background p-0.5">
+                <button
+                  type="button"
+                  onClick={() => setPreviewMode("desktop")}
+                  className={cn("p-1.5 rounded-sm text-muted-foreground", previewMode === "desktop" && "bg-muted text-foreground")}
+                >
+                  <Monitor className="h-3.5 w-3.5" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setPreviewMode("mobile")}
+                  className={cn("p-1.5 rounded-sm text-muted-foreground", previewMode === "mobile" && "bg-muted text-foreground")}
+                >
+                  <Smartphone className="h-3.5 w-3.5" />
+                </button>
+              </div>
+              <button
+                type="button"
+                onClick={() => openEditor("style")}
+                className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs text-muted-foreground hover:bg-background hover:text-foreground"
+              >
+                <Palette className="h-3.5 w-3.5" />
+                Colors
+              </button>
+            </div>
           </div>
           {canvas}
         </div>

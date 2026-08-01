@@ -1,5 +1,5 @@
 interface StatusBadgeProps {
-  status: "Active" | "Replied" | "Bounced" | "Unsubscribed" | "Completed";
+  status: "Active" | "Replied" | "Bounced" | "Unsubscribed" | "Completed" | "Scheduled";
 }
 
 const statusMap: Record<string, string> = {
@@ -8,6 +8,7 @@ const statusMap: Record<string, string> = {
   Bounced: "status-bounced",
   Unsubscribed: "status-unsubscribed",
   Completed: "status-completed",
+  Scheduled: "bg-info/10 text-info border border-info/20",
 };
 
 const StatusBadge = ({ status }: StatusBadgeProps) => {

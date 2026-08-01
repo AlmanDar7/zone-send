@@ -131,8 +131,9 @@ const Profile = () => {
   });
 
   return (
-    <div className="space-y-8 max-w-3xl">
-      <div>
+    <div className="w-full px-4 py-8 sm:px-6 lg:px-10">
+      <div className="space-y-8 max-w-3xl">
+        <div>
         <h1 className="text-2xl font-display font-bold text-foreground">Profile</h1>
         <p className="text-muted-foreground text-sm mt-1">Manage your account details and security settings.</p>
       </div>
@@ -250,7 +251,8 @@ const Profile = () => {
             </AlertDialog>
           </CardContent>
         </Card>
-      </motion.div>
+        </motion.div>
+      </div>
     </div>
   );
 };

@@ -513,12 +513,19 @@ const CampaignWizard = () => {
       const visualConfig = designConfig || toVisualConfig(selectedTemplate);
       const visualContent = buildVisualTemplateContent(visualConfig);
 
+      // Inject preheader into HTML if set
+      let finalHtml = visualContent.htmlBody;
+      if (previewText.trim()) {
+        const preheaderDiv = `<div style="display:none;font-size:1px;color:#ffffff;line-height:1px;max-height:0px;max-width:0px;opacity:0;overflow:hidden">${previewText.trim()}</div>`;
+        finalHtml = preheaderDiv + finalHtml;
+      }
+
       await supabase
         .from("email_templates")
         .update({
           subject,
           body: visualContent.body,
-          html_body: visualContent.htmlBody,
+          html_body: finalHtml,
           blocks: null,
           design_config: visualConfig as any,
           template_format: "visual",
@@ -531,7 +538,7 @@ const CampaignWizard = () => {
         .insert({
           user_id: user.id,
           name,
-          status: sendMode === "now" ? "Running" : "Draft",
+          status: sendMode === "now" ? "Running" : "Scheduled",
         })
         .select()
         .single();

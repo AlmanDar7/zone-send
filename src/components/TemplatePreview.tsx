@@ -23,8 +23,8 @@ const TemplatePreview = ({ html, body, className, scaled = false, variables }: T
   return (
     <div className={cn("overflow-hidden rounded-[24px] border border-border bg-white", className)}>
       <div
-        className={cn(scaled && "origin-top scale-[0.58]")}
-        style={scaled ? { width: "172%", marginBottom: "-38%" } : undefined}
+        className={cn(scaled && "origin-top-left scale-[0.58]")}
+        style={scaled ? { width: "172.4%", marginBottom: "-38%" } : undefined}
         dangerouslySetInnerHTML={{ __html: replaceTemplateVariables(html || fallbackHtml, variables) }}
       />
     </div>

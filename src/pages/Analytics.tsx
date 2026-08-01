@@ -180,6 +180,41 @@ const Analytics = () => {
     enabled: !!user,
   });
 
+  const { data: growthData = [] } = useQuery({
+    queryKey: ["analytics-growth", user?.id, selectedCampaign],
+    queryFn: async () => {
+      const days = 7;
+      const result = [];
+      for (let i = days - 1; i >= 0; i--) {
+        const date = new Date();
+        date.setDate(date.getDate() - i);
+        const dayStr = date.toISOString().split("T")[0];
+        const nextDay = new Date(date);
+        nextDay.setDate(nextDay.getDate() + 1);
+        const nextDayStr = nextDay.toISOString().split("T")[0];
+
+        let query = supabase
+          .from("contacts")
+          .select("*", { count: "exact", head: true })
+          .eq("user_id", user!.id)
+          .gte("created_at", dayStr)
+          .lt("created_at", nextDayStr);
+
+        if (selectedCampaign !== "all") {
+          query = query.eq("campaign_id", selectedCampaign);
+        }
+
+        const res = await query;
+        result.push({
+          date: date.toLocaleDateString("en", { weekday: "short" }),
+          subscribers: res.count || 0,
+        });
+      }
+      return result;
+    },
+    enabled: !!user,
+  });
+
   const { data: topContacts = [] } = useQuery({
     queryKey: ["top-contacts", user?.id, selectedCampaign],
     queryFn: async () => {
@@ -212,7 +247,7 @@ const Analytics = () => {
   return (
     <div>
       <div className="border-b border-border bg-card">
-        <div className="mx-auto flex max-w-[1400px] flex-wrap items-center justify-between gap-4 px-4 py-5 sm:px-6 lg:px-10">
+        <div className="flex w-full flex-wrap items-center justify-between gap-4 px-4 py-5 sm:px-6 lg:px-10">
           <div>
             <h1 className="text-xl font-semibold text-foreground">Analytics</h1>
             <p className="mt-1 text-sm text-muted-foreground">
@@ -237,7 +272,7 @@ const Analytics = () => {
         </div>
       </div>
 
-      <div className="mx-auto max-w-[1400px] space-y-8 px-4 py-8 sm:px-6 lg:px-10">
+      <div className="w-full space-y-8 px-4 py-8 sm:px-6 lg:px-10">
         {selectedCampaign !== "all" && stats?.totalSent === 0 && (
           <p className="rounded-lg border border-border bg-muted/40 px-4 py-3 text-sm text-muted-foreground">
             No sent emails recorded for this campaign yet. Metrics will appear after emails are sent from
@@ -389,6 +424,47 @@ const Analytics = () => {
             </div>
           </motion.div>
         </div>
+
+        <motion.div
+          initial={{ opacity: 0, y: 12 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.18 }}
+          className="stat-card !p-5"
+        >
+          <h3 className="mb-4 font-display font-semibold text-foreground">
+            Subscriber Growth (Last 7 Days)
+            {selectedCampaignName ? ` — ${selectedCampaignName}` : ""}
+          </h3>
+          <ResponsiveContainer width="100%" height={280}>
+            <AreaChart data={growthData}>
+              <defs>
+                <linearGradient id="growthGrad" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor="hsl(210, 92%, 55%)" stopOpacity={0.3} />
+                  <stop offset="100%" stopColor="hsl(210, 92%, 55%)" stopOpacity={0} />
+                </linearGradient>
+              </defs>
+              <CartesianGrid strokeDasharray="3 3" stroke="hsl(220, 13%, 91%)" />
+              <XAxis dataKey="date" tick={{ fontSize: 12, fill: "hsl(220, 9%, 46%)" }} />
+              <YAxis tick={{ fontSize: 12, fill: "hsl(220, 9%, 46%)" }} />
+              <Tooltip
+                contentStyle={{
+                  background: "hsl(0, 0%, 100%)",
+                  border: "1px solid hsl(220, 13%, 91%)",
+                  borderRadius: "8px",
+                  fontSize: "12px",
+                }}
+              />
+              <Area
+                type="monotone"
+                dataKey="subscribers"
+                stroke="hsl(210, 92%, 55%)"
+                fill="url(#growthGrad)"
+                strokeWidth={2}
+                name="New Subscribers"
+              />
+            </AreaChart>
+          </ResponsiveContainer>
+        </motion.div>
 
         <motion.div
           initial={{ opacity: 0, y: 12 }}

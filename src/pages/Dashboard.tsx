@@ -1,15 +1,17 @@
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Users, Send, Mail, MessageSquare } from "lucide-react";
+import { Users, Send, Mail, MessageSquare, Eye, MousePointerClick, Plus, Megaphone, UserPlus } from "lucide-react";
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 import StatCard from "@/components/StatCard";
 import { motion } from "framer-motion";
 import { useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 
 const Dashboard = () => {
   const { user } = useAuth();
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
 
   // Realtime subscription for dashboard auto-refresh
   useEffect(() => {
@@ -79,6 +81,28 @@ const Dashboard = () => {
     enabled: !!user,
   });
 
+  const { data: engagementStats } = useQuery({
+    queryKey: ["dashboard-engagement", user?.id],
+    queryFn: async () => {
+      const [sentRes, eventsRes] = await Promise.all([
+        supabase.from("email_queue").select("*", { count: "exact", head: true }).eq("status", "sent"),
+        supabase.from("email_events").select("*"),
+      ]);
+      const totalSent = sentRes.count || 0;
+      const events = eventsRes.data || [];
+      const uniqueOpens = new Set(events.filter((e) => e.event_type === "open").map((e) => e.contact_id)).size;
+      const uniqueClicks = new Set(events.filter((e) => e.event_type === "click").map((e) => e.contact_id)).size;
+      return {
+        totalSent,
+        uniqueOpens,
+        uniqueClicks,
+        openRate: totalSent > 0 ? ((uniqueOpens / totalSent) * 100).toFixed(1) : "0",
+        clickRate: totalSent > 0 ? ((uniqueClicks / totalSent) * 100).toFixed(1) : "0",
+      };
+    },
+    enabled: !!user,
+  });
+
   const { data: recentContacts } = useQuery({
     queryKey: ["recent-contacts", user?.id],
     queryFn: async () => {
@@ -136,17 +160,44 @@ const Dashboard = () => {
   return (
     <div>
       <div className="border-b border-border bg-card px-4 py-6 sm:px-6 lg:px-10">
-        <div className="mx-auto max-w-[1400px]">
+        <div className="w-full">
           <h1 className="text-xl font-semibold text-foreground">Dashboard</h1>
           <p className="mt-1 text-sm text-muted-foreground">Campaign overview and analytics</p>
         </div>
       </div>
-      <div className="mx-auto max-w-[1400px] space-y-8 px-4 py-8 sm:px-6 lg:px-10">
+      <div className="w-full space-y-8 px-4 py-8 sm:px-6 lg:px-10">
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5">
+      {/* Quick Actions */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        {[
+          { icon: Plus, label: "Create Email", desc: "Design a new email template", path: "/templates?new=1" },
+          { icon: Megaphone, label: "New Campaign", desc: "Send to your audience", path: "/campaigns/new" },
+          { icon: UserPlus, label: "Add Contacts", desc: "Grow your audience", path: "/contacts" },
+        ].map((action) => (
+          <motion.button
+            key={action.label}
+            whileHover={{ y: -2 }}
+            whileTap={{ scale: 0.98 }}
+            onClick={() => navigate(action.path)}
+            className="flex items-center gap-4 rounded-xl border border-border bg-card p-4 text-left shadow-sm transition-colors hover:border-primary/40 hover:bg-primary/5"
+          >
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary/10">
+              <action.icon className="h-5 w-5 text-primary" />
+            </div>
+            <div className="min-w-0">
+              <p className="text-sm font-semibold text-foreground">{action.label}</p>
+              <p className="text-xs text-muted-foreground">{action.desc}</p>
+            </div>
+          </motion.button>
+        ))}
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-5">
         <StatCard icon={Users} title="Total Contacts" value={contacts?.toLocaleString() || "0"} />
         <StatCard icon={Send} title="Active Campaigns" value={campaigns?.length || 0} />
         <StatCard icon={Mail} title="Emails Sent Today" value={emailsSentToday || 0} />
+        <StatCard icon={Eye} title="Open Rate" value={`${engagementStats?.openRate || 0}%`} change={`${engagementStats?.uniqueOpens || 0} unique opens`} changeType="positive" />
+        <StatCard icon={MousePointerClick} title="Click Rate" value={`${engagementStats?.clickRate || 0}%`} change={`${engagementStats?.uniqueClicks || 0} unique clicks`} changeType="positive" />
         <StatCard icon={MessageSquare} title="Total Replies" value={replies || 0} />
       </div>
 
@@ -212,6 +263,7 @@ const Dashboard = () => {
                       <span className={`px-2.5 py-0.5 rounded-full text-xs font-medium ${
                         c.status === "Running" ? "bg-success/10 text-success" :
                         c.status === "Paused" ? "bg-warning/10 text-warning" :
+                        c.status === "Scheduled" ? "bg-info/10 text-info" :
                         "bg-muted text-muted-foreground"
                       }`}>{c.status}</span>
                     </td>

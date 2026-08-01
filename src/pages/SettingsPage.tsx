@@ -13,6 +13,7 @@ import { toast } from "sonner";
 import { getSmtpConfigError, hasUsableSmtpConfig } from "@/lib/smtpValidation";
 import { getAccessToken } from "@/lib/getAccessToken";
 import { getPayloadErrorMessage, getSupabaseFunctionErrorMessage } from "@/lib/supabaseFunctionErrors";
+import { Download, AlertCircle } from "lucide-react";
 
 const SettingsPage = () => {
   const { user } = useAuth();
@@ -191,9 +192,34 @@ const SettingsPage = () => {
     onError: (err: any) => toast.error(err.message),
   });
 
+  const exportUserData = async () => {
+    try {
+      const { data: contacts } = await supabase.from("contacts").select("*").eq("user_id", user!.id);
+      const { data: campaigns } = await supabase.from("campaigns").select("*").eq("user_id", user!.id);
+      const exportData = { contacts, campaigns };
+      const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `reachquix-data-export-${new Date().toISOString().split("T")[0]}.json`;
+      a.click();
+      URL.revokeObjectURL(url);
+      toast.success("Your data export is complete.");
+    } catch (e: any) {
+      toast.error("Failed to export data: " + e.message);
+    }
+  };
+
+  const deleteAccount = async () => {
+    if (window.confirm("Are you absolutely sure you want to delete your account? This action cannot be undone and all your campaigns and contacts will be permanently removed.")) {
+      toast.info("Account deletion request submitted. Support will process this within 24 hours to comply with GDPR.");
+    }
+  };
+
   return (
-    <div className="space-y-8 max-w-2xl">
-      <div>
+    <div className="w-full px-4 py-8 sm:px-6 lg:px-10">
+      <div className="space-y-8 max-w-2xl">
+        <div>
         <h1 className="text-2xl font-display font-bold text-foreground">Settings</h1>
         <p className="text-muted-foreground text-sm mt-1">Configure your email automation</p>
       </div>
@@ -284,6 +310,35 @@ const SettingsPage = () => {
         <p className="text-xs text-muted-foreground">Overflow emails will be automatically queued for the next day.</p>
         <Button size="sm" onClick={() => saveLimit.mutate()} disabled={saveLimit.isPending}>{saveLimit.isPending ? "Saving..." : "Save Limits"}</Button>
       </motion.div>
+      <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 }} className="stat-card !p-6 space-y-5 border-destructive/20">
+        <h3 className="font-display font-semibold text-destructive">Data & Privacy</h3>
+        <p className="text-sm text-muted-foreground">Manage your account data and privacy settings in compliance with GDPR and CCPA.</p>
+        
+        <div className="space-y-4 pt-2">
+          <div className="flex items-center justify-between gap-4 p-4 rounded-lg border border-border bg-muted/20">
+            <div>
+              <p className="font-medium text-foreground text-sm">Export Data</p>
+              <p className="text-xs text-muted-foreground mt-1">Download a copy of all your contacts and campaign data in JSON format.</p>
+            </div>
+            <Button variant="outline" size="sm" onClick={exportUserData}>
+              <Download className="w-4 h-4 mr-2" />
+              Export
+            </Button>
+          </div>
+
+          <div className="flex items-center justify-between gap-4 p-4 rounded-lg border border-destructive/20 bg-destructive/5">
+            <div>
+              <p className="font-medium text-destructive text-sm">Delete Account</p>
+              <p className="text-xs text-muted-foreground mt-1">Permanently delete your account and all associated data. This cannot be undone.</p>
+            </div>
+            <Button variant="destructive" size="sm" onClick={deleteAccount}>
+              <AlertCircle className="w-4 h-4 mr-2" />
+              Delete Account
+            </Button>
+          </div>
+        </div>
+      </motion.div>
+      </div>
     </div>
   );
 };

@@ -61,7 +61,7 @@ const PageToolbar = ({
   extraActions,
 }: PageToolbarProps) => (
   <div className="border-b border-border bg-card">
-    <div className="mx-auto flex max-w-[1400px] flex-col gap-4 px-4 py-5 sm:px-6 lg:px-10">
+    <div className="flex w-full flex-col gap-4 px-4 py-5 sm:px-6 lg:px-10">
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div className="flex items-baseline gap-3">
           <h1 className="text-xl font-semibold text-foreground">{title}</h1>

@@ -32,6 +32,7 @@ const statusColors: Record<string, string> = {
   Paused: "bg-warning/10 text-warning",
   Draft: "bg-muted text-muted-foreground",
   Completed: "bg-info/10 text-info",
+  Scheduled: "bg-info/10 text-info border border-info/20",
 };
 
 type CampaignStep = Database["public"]["Tables"]["campaign_steps"]["Row"];
@@ -420,7 +421,7 @@ const Campaigns = ({ variant = "campaigns" }: CampaignsProps) => {
         }
       />
 
-      <div className="mx-auto max-w-[1400px] px-4 py-8 sm:px-6 lg:px-10">
+      <div className="w-full px-4 py-8 sm:px-6 lg:px-10">
       {isWorkflowsPage && duplicateWorkflowIds.length > 0 && (
         <div className="mb-6 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-warning/30 bg-warning/10 px-4 py-3">
           <p className="text-sm text-foreground">

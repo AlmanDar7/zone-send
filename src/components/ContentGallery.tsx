@@ -230,7 +230,7 @@ const ContentGallery = ({ variant }: ContentGalleryProps) => {
         }}
       />
 
-      <div className="mx-auto max-w-[1400px] px-4 py-8 sm:px-6 lg:px-10">
+      <div className="w-full px-4 py-8 sm:px-6 lg:px-10">
         {isLoading ? (
           <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
             {[1, 2, 3, 4, 5, 6].map((i) => (
@@ -313,6 +313,7 @@ const ContentGallery = ({ variant }: ContentGalleryProps) => {
                         </span>
                       </div>
                       <ItemMenu
+                        item={item}
                         isForms={isForms}
                         onPreview={() => setPreviewItem(item)}
                         onEdit={() => navigate(`/templates?edit=${item.id}`)}
@@ -409,6 +410,8 @@ const ContentGallery = ({ variant }: ContentGalleryProps) => {
 };
 
 const ItemMenu = ({
+  item,
+  isForms,
   onPreview,
   onEdit,
   onDuplicate,

@@ -1,5 +1,5 @@
 import { useState, useRef, useMemo } from "react";
-import { Search, RefreshCw, Upload, Plus, MoreHorizontal, Trash2, Link, FileSpreadsheet, CheckSquare, Square, XCircle, FolderPlus, Folder, FolderOpen, Pencil, X } from "lucide-react";
+import { Search, RefreshCw, Upload, Plus, MoreHorizontal, Trash2, Link, FileSpreadsheet, CheckSquare, Square, XCircle, FolderPlus, Folder, FolderOpen, Pencil, X, Download, Tag } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -65,6 +65,14 @@ const Contacts = () => {
   const [addToFolderOpen, setAddToFolderOpen] = useState(false);
   const [addToFolderId, setAddToFolderId] = useState("none");
 
+  // Tags state
+  const [activeTag, setActiveTag] = useState<string | null>(null);
+  const [manageTagsOpen, setManageTagsOpen] = useState(false);
+  const [newTagName, setNewTagName] = useState("");
+  const [newTagColor, setNewTagColor] = useState("bg-primary/10 text-primary");
+  const [assignTagsOpen, setAssignTagsOpen] = useState(false);
+  const [selectedTagIds, setSelectedTagIds] = useState<Set<string>>(new Set());
+
   // Queries
   const { data: contacts = [], isLoading } = useQuery({
     queryKey: ["contacts", user?.id],
@@ -114,6 +122,26 @@ const Contacts = () => {
     enabled: !!user,
   });
 
+  const { data: tags = [] } = useQuery({
+    queryKey: ["tags", user?.id],
+    queryFn: async () => {
+      const { data, error } = await supabase.from("tags").select("*").order("name");
+      if (error) throw error;
+      return data;
+    },
+    enabled: !!user,
+  });
+
+  const { data: contactTags = [] } = useQuery({
+    queryKey: ["contact_tags", user?.id],
+    queryFn: async () => {
+      const { data, error } = await supabase.from("contact_tags").select("*");
+      if (error) throw error;
+      return data;
+    },
+    enabled: !!user,
+  });
+
   // Derived: contact IDs in active folder
   const folderContactIds = useMemo(() => {
     if (!activeFolder) return null; // null means show all
@@ -123,6 +151,16 @@ const Contacts = () => {
         .map((m: any) => m.contact_id)
     );
   }, [activeFolder, folderMembers]);
+
+  // Derived: contact IDs for active tag
+  const tagContactIds = useMemo(() => {
+    if (!activeTag) return null;
+    return new Set(
+      contactTags
+        .filter((ct: any) => ct.tag_id === activeTag)
+        .map((ct: any) => ct.contact_id)
+    );
+  }, [activeTag, contactTags]);
 
   // Folder mutations
   const createFolder = useMutation({
@@ -197,6 +235,63 @@ const Contacts = () => {
       queryClient.invalidateQueries({ queryKey: ["contact-folder-members"] });
       setSelectedIds(new Set());
       toast.success("Removed from folder");
+    },
+    onError: (err: any) => toast.error(err.message),
+  });
+
+  // Tag mutations
+  const createTag = useMutation({
+    mutationFn: async ({ name, color }: { name: string; color: string }) => {
+      const { error } = await supabase.from("tags").insert({ user_id: user!.id, name, color });
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["tags"] });
+      setNewTagName("");
+      toast.success("Tag created!");
+    },
+    onError: (err: any) => toast.error(err.message),
+  });
+
+  const deleteTag = useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase.from("tags").delete().eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["tags"] });
+      queryClient.invalidateQueries({ queryKey: ["contact_tags"] });
+      if (activeTag) setActiveTag(null);
+      toast.success("Tag deleted");
+    },
+    onError: (err: any) => toast.error(err.message),
+  });
+
+  const assignTags = useMutation({
+    mutationFn: async ({ contactIds, tagIds }: { contactIds: string[]; tagIds: string[] }) => {
+      const rows = contactIds.flatMap((contact_id) => tagIds.map(tag_id => ({ contact_id, tag_id })));
+      if (rows.length === 0) return;
+      const { error } = await supabase.from("contact_tags").upsert(rows, { onConflict: "contact_id,tag_id" });
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["contact_tags"] });
+      setSelectedIds(new Set());
+      setAssignTagsOpen(false);
+      setSelectedTagIds(new Set());
+      toast.success("Tags assigned!");
+    },
+    onError: (err: any) => toast.error(err.message),
+  });
+
+  const removeTagFromContact = useMutation({
+    mutationFn: async ({ contactId, tagId }: { contactId: string; tagId: string }) => {
+      const { error } = await supabase.from("contact_tags").delete().eq("contact_id", contactId).eq("tag_id", tagId);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["contact_tags"] });
+      toast.success("Tag removed");
     },
     onError: (err: any) => toast.error(err.message),
   });
@@ -406,9 +501,10 @@ const Contacts = () => {
       const matchSearch = c.name.toLowerCase().includes(search.toLowerCase()) || c.email.toLowerCase().includes(search.toLowerCase());
       const matchFilter = activeFilter === "All" || c.status === activeFilter;
       const matchFolder = folderContactIds === null || folderContactIds.has(c.id);
-      return matchSearch && matchFilter && matchFolder;
+      const matchTag = tagContactIds === null || tagContactIds.has(c.id);
+      return matchSearch && matchFilter && matchFolder && matchTag;
     });
-  }, [contacts, search, activeFilter, folderContactIds]);
+  }, [contacts, search, activeFilter, folderContactIds, tagContactIds]);
 
   const toggleSelect = (id: string) => {
     setSelectedIds((prev) => {
@@ -438,7 +534,7 @@ const Contacts = () => {
   }, [folderMembers]);
 
   return (
-    <div className="space-y-6">
+    <div>
       {/* Dialogs */}
       <Dialog open={linkOpen} onOpenChange={(open) => { setLinkOpen(open); if (!open) { setSelectedContact(null); setSelectedCampaignId("none"); } }}>
         <DialogContent>
@@ -562,14 +658,116 @@ const Contacts = () => {
         </DialogContent>
       </Dialog>
 
-      <div className="border-b border-border bg-card -mx-0 mb-6 px-4 py-5 sm:px-6">
-        <div className="flex flex-wrap items-center justify-between gap-4">
+      {/* Manage Tags Dialog */}
+      <Dialog open={manageTagsOpen} onOpenChange={setManageTagsOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="font-display">Manage Tags</DialogTitle>
+            <DialogDescription>Create and delete tags to organize your contacts.</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="flex items-end gap-2">
+              <div className="flex-1 space-y-2">
+                <Label>Tag Name</Label>
+                <Input value={newTagName} onChange={(e) => setNewTagName(e.target.value)} placeholder="e.g. VIP Customer" />
+              </div>
+              <div className="w-[120px] space-y-2">
+                <Label>Color</Label>
+                <Select value={newTagColor} onValueChange={setNewTagColor}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="bg-primary/10 text-primary">Blue</SelectItem>
+                    <SelectItem value="bg-green-500/10 text-green-600">Green</SelectItem>
+                    <SelectItem value="bg-purple-500/10 text-purple-600">Purple</SelectItem>
+                    <SelectItem value="bg-yellow-500/10 text-yellow-600">Yellow</SelectItem>
+                    <SelectItem value="bg-red-500/10 text-red-600">Red</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <Button onClick={() => createTag.mutate({ name: newTagName, color: newTagColor })} disabled={createTag.isPending || !newTagName.trim()}>
+                Add
+              </Button>
+            </div>
+            <div className="space-y-2 max-h-[300px] overflow-y-auto">
+              {tags.map((tag: any) => (
+                <div key={tag.id} className="flex items-center justify-between p-2 rounded-md border border-border bg-muted/20">
+                  <span className={`text-xs font-medium px-2 py-1 rounded-full ${tag.color}`}>{tag.name}</span>
+                  <Button variant="ghost" size="icon" className="h-6 w-6 text-destructive hover:text-destructive hover:bg-destructive/10" onClick={() => deleteTag.mutate(tag.id)}>
+                    <Trash2 className="h-3 w-3" />
+                  </Button>
+                </div>
+              ))}
+              {tags.length === 0 && <p className="text-sm text-muted-foreground text-center py-4">No tags created yet.</p>}
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Assign Tags Dialog (bulk) */}
+      <Dialog open={assignTagsOpen} onOpenChange={(open) => { setAssignTagsOpen(open); if (!open) setSelectedTagIds(new Set()); }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="font-display">Assign Tags</DialogTitle>
+            <DialogDescription>Assign tags to {selectedIds.size} selected contacts.</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 max-h-[300px] overflow-y-auto">
+            {tags.map((tag: any) => (
+              <div key={tag.id} className="flex items-center gap-3 p-2 rounded-md hover:bg-muted/30">
+                <button
+                  type="button"
+                  className="flex items-center gap-3 w-full text-left"
+                  onClick={() => {
+                    setSelectedTagIds(prev => {
+                      const next = new Set(prev);
+                      if (next.has(tag.id)) next.delete(tag.id);
+                      else next.add(tag.id);
+                      return next;
+                    });
+                  }}
+                >
+                  <div className={`w-4 h-4 rounded-sm border flex items-center justify-center ${selectedTagIds.has(tag.id) ? 'bg-primary border-primary' : 'border-input'}`}>
+                    {selectedTagIds.has(tag.id) && <CheckSquare className="w-3 h-3 text-primary-foreground" />}
+                  </div>
+                  <span className={`text-xs font-medium px-2 py-1 rounded-full ${tag.color}`}>{tag.name}</span>
+                </button>
+              </div>
+            ))}
+            {tags.length === 0 && <p className="text-sm text-muted-foreground text-center py-4">No tags available to assign. Create some tags first.</p>}
+          </div>
+          <Button
+            onClick={() => assignTags.mutate({ contactIds: Array.from(selectedIds), tagIds: Array.from(selectedTagIds) })}
+            disabled={selectedTagIds.size === 0 || assignTags.isPending}
+          >
+            {assignTags.isPending ? "Assigning..." : "Assign Selected Tags"}
+          </Button>
+        </DialogContent>
+      </Dialog>
+
+      <div className="border-b border-border bg-card">
+        <div className="flex w-full flex-wrap items-center justify-between gap-4 px-4 py-5 sm:px-6 lg:px-10">
         <div>
           <h1 className="text-xl font-semibold text-foreground">My audience</h1>
           <p className="mt-1 text-sm text-muted-foreground">{contacts.length} total contacts</p>
         </div>
         <div className="flex gap-2">
+          <Button variant="outline" size="sm" onClick={() => {
+            const header = "Name,Email,Company,Status,Source,Campaign\n";
+            const rows = filtered.map((c: any) =>
+              `"${(c.name || "").replace(/"/g, '""')}","${c.email}","${(c.company_name || "").replace(/"/g, '""')}","${c.status}","${c.source || "manual"}","${c.campaigns?.name || ""}"`
+            ).join("\n");
+            const blob = new Blob([header + rows], { type: "text/csv;charset=utf-8;" });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement("a");
+            a.href = url;
+            a.download = `contacts-${new Date().toISOString().split("T")[0]}.csv`;
+            a.click();
+            URL.revokeObjectURL(url);
+            toast.success(`Exported ${filtered.length} contacts`);
+          }}><Download className="w-4 h-4 mr-2" />Export CSV</Button>
           <Button variant="outline" size="sm" onClick={syncGoogleSheets}><RefreshCw className="w-4 h-4 mr-2" />Sync Sheets</Button>
+          <Button variant="outline" size="sm" onClick={() => setManageTagsOpen(true)}>
+            <Tag className="w-4 h-4 mr-2" />Manage Tags
+          </Button>
           <div className="flex items-center gap-2">
             <Select value={excelCampaignId} onValueChange={setExcelCampaignId}>
               <SelectTrigger className="w-[160px] h-8 text-xs"><SelectValue placeholder="Campaign (optional)" /></SelectTrigger>
@@ -657,9 +855,10 @@ const Contacts = () => {
             </DialogContent>
           </Dialog>
         </div>
-        </div>
       </div>
+    </div>
 
+      <div className="w-full space-y-6 px-4 py-8 sm:px-6 lg:px-10">
       {/* Folder Tabs */}
       <div className="flex items-center gap-2 overflow-x-auto pb-1">
         <button
@@ -715,7 +914,16 @@ const Contacts = () => {
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
           <Input placeholder="Search contacts..." value={search} onChange={(e) => setSearch(e.target.value)} className="pl-9" />
         </div>
-        <div className="flex gap-1.5">
+        <div className="flex gap-1.5 flex-wrap">
+          <Select value={activeTag || "all"} onValueChange={(v) => setActiveTag(v === "all" ? null : v)}>
+            <SelectTrigger className="w-[140px] h-8 text-xs bg-muted/50 border-0">
+              <SelectValue placeholder="Filter by Tag" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Tags</SelectItem>
+              {tags.map((t: any) => <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>)}
+            </SelectContent>
+          </Select>
           {statusFilters.map((f) => (
             <button key={f} onClick={() => setActiveFilter(f)}
               className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
@@ -742,6 +950,10 @@ const Contacts = () => {
               <FolderPlus className="w-4 h-4 mr-1" />Add to Folder
             </Button>
           )}
+          {/* Assign Tags */}
+          <Button variant="outline" size="sm" onClick={() => setAssignTagsOpen(true)}>
+            <Tag className="w-4 h-4 mr-1" />Assign Tags
+          </Button>
           {/* Remove from folder (only when viewing a folder) */}
           {activeFolder && (
             <Button variant="outline" size="sm" onClick={() => {
@@ -801,6 +1013,7 @@ const Contacts = () => {
               </th>
               <th className="text-left py-3 px-5 text-muted-foreground font-medium">Name</th>
               <th className="text-left py-3 px-5 text-muted-foreground font-medium">Email</th>
+              <th className="text-left py-3 px-5 text-muted-foreground font-medium">Tags</th>
               <th className="text-left py-3 px-5 text-muted-foreground font-medium">Status</th>
               <th className="text-left py-3 px-5 text-muted-foreground font-medium">Campaign</th>
               <th className="text-left py-3 px-5 text-muted-foreground font-medium">Company</th>
@@ -810,9 +1023,9 @@ const Contacts = () => {
           </thead>
           <tbody>
             {isLoading ? (
-              <tr><td colSpan={8} className="py-8 text-center text-muted-foreground">Loading...</td></tr>
+              <tr><td colSpan={9} className="py-8 text-center text-muted-foreground">Loading...</td></tr>
             ) : filtered.length === 0 ? (
-              <tr><td colSpan={8} className="py-8 text-center text-muted-foreground">
+              <tr><td colSpan={9} className="py-8 text-center text-muted-foreground">
                 {activeFolder ? "No contacts in this folder" : "No contacts found"}
               </td></tr>
             ) : filtered.map((c: any) => (
@@ -824,6 +1037,16 @@ const Contacts = () => {
                 </td>
                 <td className="py-3 px-5 font-medium text-foreground">{c.name}</td>
                 <td className="py-3 px-5 text-muted-foreground">{c.email}</td>
+                <td className="py-3 px-5">
+                  <div className="flex flex-wrap gap-1">
+                    {contactTags
+                      .filter((ct: any) => ct.contact_id === c.id)
+                      .map((ct: any) => {
+                        const t = tags.find((tag: any) => tag.id === ct.tag_id);
+                        return t ? <span key={t.id} className={`text-[10px] font-medium px-2 py-0.5 rounded-full ${t.color}`}>{t.name}</span> : null;
+                      })}
+                  </div>
+                </td>
                 <td className="py-3 px-5"><StatusBadge status={c.status as ContactStatus} /></td>
                 <td className="py-3 px-5 text-muted-foreground">{c.campaigns?.name || "Unassigned"}</td>
                 <td className="py-3 px-5 text-muted-foreground">{c.company_name || "—"}</td>
@@ -862,6 +1085,7 @@ const Contacts = () => {
           </tbody>
         </table>
       </motion.div>
+    </div>
     </div>
   );
 };

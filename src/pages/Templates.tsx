@@ -55,6 +55,7 @@ type EmailTemplateRow = Database["public"]["Tables"]["email_templates"]["Row"];
 type TemplateFormState = {
   name: string;
   subject: string;
+  preview_text: string;
   body: string;
   type: string;
   category: string;
@@ -67,6 +68,7 @@ type TemplateFormState = {
 const createEmptyForm = (category = "general"): TemplateFormState => ({
   name: "",
   subject: "",
+  preview_text: "",
   body: "",
   type: "Initial",
   category,
@@ -99,8 +101,9 @@ const toFormState = (template: EmailTemplateRow): TemplateFormState => {
 
   return {
     name: template.name,
-    subject: template.subject,
-    body: template.body,
+    subject: template.subject || "",
+    preview_text: (template as any).preview_text || "",
+    body: template.body || "",
     type: template.type,
     category: template.category,
     template_format: templateFormat,
@@ -120,6 +123,7 @@ const Templates = () => {
   const [previewTemplate, setPreviewTemplate] = useState<EmailTemplateRow | null>(null);
   const [form, setForm] = useState<TemplateFormState>(createEmptyForm());
   const [previewVariables, setPreviewVariables] = useState<TemplateVariableValues>(sampleTemplateVariables);
+  const [categoryFilter, setCategoryFilter] = useState("all");
 
   const { data: templates = [], isLoading } = useQuery({
     queryKey: ["templates", user?.id],
@@ -169,6 +173,7 @@ const Templates = () => {
         user_id: user!.id,
         name: form.name,
         subject: form.subject,
+        preview_text: form.preview_text,
         body: form.body,
         type: form.type,
         category: form.category,
@@ -197,6 +202,7 @@ const Templates = () => {
         .update({
           name: form.name,
           subject: form.subject,
+          preview_text: form.preview_text,
           body: form.body,
           type: form.type,
           category: form.category,
@@ -225,6 +231,7 @@ const Templates = () => {
         user_id: user!.id,
         name: `${template.name} (Copy)`,
         subject: template.subject,
+        preview_text: (template as any).preview_text || "",
         body: template.body,
         type: template.type,
         template_format: template.template_format,
@@ -259,7 +266,7 @@ const Templates = () => {
   });
 
   const openCreateWithStarter = (presetId: VisualTemplatePresetId) => {
-    setForm({ ...getStarterTemplate(presetId), blocks: null });
+    setForm({ ...createEmptyForm(), ...getStarterTemplate(presetId), blocks: null });
     setCreateOpen(true);
   };
 
@@ -406,13 +413,23 @@ const Templates = () => {
           </div>
         </div>
 
-        <div className="space-y-2">
-          <Label>Subject</Label>
-          <Input
-            value={form.subject}
-            onChange={(e) => setForm((prev) => ({ ...prev, subject: e.target.value }))}
-            placeholder="Your resource for {{CompanyName}} is ready"
-          />
+        <div className="grid gap-4 sm:grid-cols-2">
+          <div className="space-y-2">
+            <Label>Subject</Label>
+            <Input
+              value={form.subject}
+              onChange={(e) => setForm((prev) => ({ ...prev, subject: e.target.value }))}
+              placeholder="Your resource for {{CompanyName}} is ready"
+            />
+          </div>
+          <div className="space-y-2">
+            <Label>Preview Text (Optional)</Label>
+            <Input
+              value={form.preview_text}
+              onChange={(e) => setForm((prev) => ({ ...prev, preview_text: e.target.value }))}
+              placeholder="A short summary of what's inside..."
+            />
+          </div>
         </div>
 
         <Tabs
@@ -578,8 +595,8 @@ const Templates = () => {
   );
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
+    <div className="w-full space-y-6 px-4 py-8 sm:px-6 lg:px-10">
+      <div className="flex flex-wrap items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-display font-bold text-foreground">Templates</h1>
           <p className="text-muted-foreground text-sm mt-1">
@@ -644,8 +661,17 @@ const Templates = () => {
           </p>
         </div>
       ) : (
-        <div className="grid gap-4">
-          {templates.map((template, index) => (
+        <div className="space-y-4">
+          <Tabs value={categoryFilter} onValueChange={setCategoryFilter}>
+            <TabsList>
+              <TabsTrigger value="all">All Templates</TabsTrigger>
+              <TabsTrigger value="general">General</TabsTrigger>
+              <TabsTrigger value="form">Form Opt-in</TabsTrigger>
+              <TabsTrigger value="newsletter">Newsletter</TabsTrigger>
+            </TabsList>
+          </Tabs>
+          <div className="grid gap-4">
+            {(categoryFilter === "all" ? templates : templates.filter(t => t.category === categoryFilter)).map((template, index) => (
             <motion.div
               key={template.id}
               initial={{ opacity: 0, y: 8 }}
@@ -695,6 +721,7 @@ const Templates = () => {
               </div>
             </motion.div>
           ))}
+        </div>
         </div>
       )}
 

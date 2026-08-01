@@ -108,7 +108,7 @@ const CampaignReport = () => {
   if (!campaign) return <p className="text-muted-foreground">Loading...</p>;
 
   return (
-    <div className="space-y-6">
+    <div className="w-full space-y-6 px-4 py-8 sm:px-6 lg:px-10">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
           <Button variant="ghost" size="icon" onClick={() => navigate("/campaigns")}><ArrowLeft className="w-4 h-4" /></Button>

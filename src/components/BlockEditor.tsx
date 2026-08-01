@@ -29,6 +29,8 @@ import {
   Save,
   Palette,
   Library,
+  Monitor,
+  Smartphone,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -113,6 +115,7 @@ const BlockEditor = ({ doc, onChange, layout = "full" }: Props) => {
   const compact = layout === "compact";
   const [selectedId, setSelectedId] = useState<BlockId | null>(null);
   const [editTarget, setEditTarget] = useState<EditTarget>(null);
+  const [previewMode, setPreviewMode] = useState<"desktop" | "mobile">("desktop");
 
   const updateBlocks = (blocks: Block[]) => onChange({ ...doc, blocks });
 
@@ -168,8 +171,9 @@ const BlockEditor = ({ doc, onChange, layout = "full" }: Props) => {
   const canvas = (
     <div
       className={cn(
-        "overflow-hidden rounded-xl border border-border p-4",
+        "overflow-hidden rounded-xl border border-border p-4 transition-all duration-300",
         compact ? "min-h-[360px]" : "min-h-[620px] xl:p-6",
+        previewMode === "mobile" ? "mx-auto max-w-[375px] shadow-sm border-[6px] border-muted" : "w-full"
       )}
       style={{ background: doc.background }}
     >
@@ -212,11 +216,27 @@ const BlockEditor = ({ doc, onChange, layout = "full" }: Props) => {
     return (
       <>
         <div className="space-y-3">
-          <div className="rounded-lg border border-border bg-muted/30 px-3 py-2">
+          <div className="flex items-center justify-between rounded-lg border border-border bg-muted/30 px-3 py-2">
             <p className="text-xs text-muted-foreground">
               <span className="font-medium text-foreground">Double-click</span> a block to edit ·{" "}
               <span className="font-medium text-foreground">Drag</span> the handle to reorder
             </p>
+            <div className="flex items-center rounded-md border border-border bg-background p-0.5">
+              <button
+                type="button"
+                onClick={() => setPreviewMode("desktop")}
+                className={cn("p-1.5 rounded-sm text-muted-foreground", previewMode === "desktop" && "bg-muted text-foreground")}
+              >
+                <Monitor className="h-3.5 w-3.5" />
+              </button>
+              <button
+                type="button"
+                onClick={() => setPreviewMode("mobile")}
+                className={cn("p-1.5 rounded-sm text-muted-foreground", previewMode === "mobile" && "bg-muted text-foreground")}
+              >
+                <Smartphone className="h-3.5 w-3.5" />
+              </button>
+            </div>
           </div>
 
           <div className="space-y-2">
