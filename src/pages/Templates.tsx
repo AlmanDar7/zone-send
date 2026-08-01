@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { useSearchParams } from "react-router-dom";
+import { useSearchParams, useNavigate } from "react-router-dom";
 import { Plus, Copy, Trash2, Eye, Edit3, Sparkles, LayoutTemplate } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -117,6 +117,7 @@ const Templates = () => {
   const { user } = useAuth();
   const queryClient = useQueryClient();
   const [searchParams, setSearchParams] = useSearchParams();
+  const navigate = useNavigate();
   const [createOpen, setCreateOpen] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
   const [selectedTemplate, setSelectedTemplate] = useState<EmailTemplateRow | null>(null);
@@ -188,8 +189,14 @@ const Templates = () => {
       queryClient.invalidateQueries({ queryKey: ["templates"] });
       queryClient.invalidateQueries({ queryKey: ["templates-list"] });
       setCreateOpen(false);
+      
+      const wasForm = form.category === FORM_CATEGORY;
       setForm(createEmptyForm());
-      toast.success("Template created!");
+      toast.success(wasForm ? "Form created!" : "Template created!");
+      
+      if (wasForm) {
+        navigate("/forms");
+      }
     },
     onError: (err: Error) => toast.error(err.message),
   });
@@ -392,45 +399,57 @@ const Templates = () => {
             <Label>Name</Label>
             <Input
               value={form.name}
-              onChange={(e) => setForm((prev) => ({ ...prev, name: e.target.value }))}
-              placeholder="Lead Magnet Download"
+              onChange={(e) => {
+                const newName = e.target.value;
+                setForm((prev) => ({ 
+                  ...prev, 
+                  name: newName,
+                  // Auto-fill subject for forms since the field is hidden
+                  subject: prev.category === FORM_CATEGORY ? newName : prev.subject
+                }));
+              }}
+              placeholder={form.category === FORM_CATEGORY ? "Newsletter Signup Form" : "Lead Magnet Download"}
             />
           </div>
-          <div className="space-y-2">
-            <Label>Type</Label>
-            <Select value={form.type} onValueChange={(value) => setForm((prev) => ({ ...prev, type: value }))}>
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {["Initial", "Follow-up 1", "Follow-up 2", "Follow-up 3", "Final"].map((type) => (
-                  <SelectItem key={type} value={type}>
-                    {type}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
+          {form.category !== FORM_CATEGORY && (
+            <div className="space-y-2">
+              <Label>Type</Label>
+              <Select value={form.type} onValueChange={(value) => setForm((prev) => ({ ...prev, type: value }))}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {["Initial", "Follow-up 1", "Follow-up 2", "Follow-up 3", "Final"].map((type) => (
+                    <SelectItem key={type} value={type}>
+                      {type}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
         </div>
 
-        <div className="grid gap-4 sm:grid-cols-2">
-          <div className="space-y-2">
-            <Label>Subject</Label>
-            <Input
-              value={form.subject}
-              onChange={(e) => setForm((prev) => ({ ...prev, subject: e.target.value }))}
-              placeholder="Your resource for {{CompanyName}} is ready"
-            />
+        {form.category !== FORM_CATEGORY && (
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div className="space-y-2">
+              <Label>Subject</Label>
+              <Input
+                value={form.subject}
+                onChange={(e) => setForm((prev) => ({ ...prev, subject: e.target.value }))}
+                placeholder="Your resource for {{CompanyName}} is ready"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Preview Text (Optional)</Label>
+              <Input
+                value={form.preview_text}
+                onChange={(e) => setForm((prev) => ({ ...prev, preview_text: e.target.value }))}
+                placeholder="A short summary of what's inside..."
+              />
+            </div>
           </div>
-          <div className="space-y-2">
-            <Label>Preview Text (Optional)</Label>
-            <Input
-              value={form.preview_text}
-              onChange={(e) => setForm((prev) => ({ ...prev, preview_text: e.target.value }))}
-              placeholder="A short summary of what's inside..."
-            />
-          </div>
-        </div>
+        )}
 
         <Tabs
           value={form.template_format}
@@ -540,7 +559,7 @@ const Templates = () => {
 
         <Button
           onClick={onSubmit}
-          disabled={isPending || !form.name || !form.subject || !form.body}
+          disabled={isPending || !form.name || (!form.subject && form.category !== FORM_CATEGORY) || !form.body}
           className="w-full sm:w-auto"
         >
           {isPending ? "Saving..." : submitLabel}
@@ -575,12 +594,14 @@ const Templates = () => {
             </div>
           </div>
 
-          <div className="rounded-xl border border-border bg-muted/20 p-3">
-            <p className="mb-2 text-xs text-muted-foreground">Subject</p>
-            <p className="rounded-lg bg-background p-3 text-sm font-medium text-foreground">
-              {replaceTemplateVariables(form.subject || "Your email subject will appear here", previewVariables)}
-            </p>
-          </div>
+          {form.category !== FORM_CATEGORY && (
+            <div className="rounded-xl border border-border bg-muted/20 p-3">
+              <p className="mb-2 text-xs text-muted-foreground">Subject</p>
+              <p className="rounded-lg bg-background p-3 text-sm font-medium text-foreground">
+                {replaceTemplateVariables(form.subject || "Your email subject will appear here", previewVariables)}
+              </p>
+            </div>
+          )}
 
           <TemplatePreview
             html={form.html_body}
@@ -598,23 +619,41 @@ const Templates = () => {
     <div className="w-full space-y-6 px-4 py-8 sm:px-6 lg:px-10">
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-display font-bold text-foreground">Templates</h1>
+          <h1 className="text-2xl font-display font-bold text-foreground">
+            {form.category === FORM_CATEGORY ? "Forms" : "Templates"}
+          </h1>
           <p className="text-muted-foreground text-sm mt-1">
-            Create plain emails or start from visual templates your team can edit.
+            {form.category === FORM_CATEGORY 
+              ? "Create signup and lead capture forms." 
+              : "Create plain emails or start from visual templates your team can edit."}
           </p>
         </div>
-        <Dialog open={createOpen} onOpenChange={setCreateOpen}>
+        <Dialog 
+          open={createOpen} 
+          onOpenChange={(open) => {
+            setCreateOpen(open);
+            if (!open && form.category === FORM_CATEGORY) {
+              navigate("/forms");
+            }
+          }}
+        >
           <DialogTrigger asChild>
             <Button size="sm" onClick={() => openCreateWithStarter("lead-magnet")}>
               <Plus className="w-4 h-4 mr-2" />
-              New Template
+              {form.category === FORM_CATEGORY ? "New Form" : "New Template"}
             </Button>
           </DialogTrigger>
           <DialogContent className="max-h-[90vh] max-w-3xl overflow-y-auto">
             <DialogHeader>
-              <DialogTitle className="font-display">Create Template</DialogTitle>
+              <DialogTitle className="font-display">
+                {form.category === FORM_CATEGORY ? "Create Form" : "Create Template"}
+              </DialogTitle>
             </DialogHeader>
-            {renderEditor(() => createTemplate.mutate(), "Create Template", createTemplate.isPending)}
+            {renderEditor(
+              () => createTemplate.mutate(), 
+              form.category === FORM_CATEGORY ? "Create Form" : "Create Template", 
+              createTemplate.isPending
+            )}
           </DialogContent>
         </Dialog>
       </div>
