@@ -1,12 +1,6 @@
-import { auth } from './firebaseAuth';
+import { getAccessToken } from './getAccessToken';
 
 const API_BASE_URL = 'http://localhost:5000/api';
-
-const getAuthToken = async () => {
-  const user = auth.currentUser;
-  if (!user) return null;
-  return await user.getIdToken();
-};
 
 const customFetch = async (endpoint: string, options: RequestInit = {}) => {
   const token = await getAuthToken();
