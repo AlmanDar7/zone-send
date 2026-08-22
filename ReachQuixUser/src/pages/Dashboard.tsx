@@ -1,5 +1,5 @@
 import { useAuth } from "@/contexts/AuthContext";
-import { supabase } from "@/integrations/supabase/client";
+import { api } from "@/lib/api";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Users, Send, Mail, MessageSquare, Eye, MousePointerClick, Plus, Megaphone, UserPlus } from "lucide-react";
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
@@ -13,151 +13,31 @@ const Dashboard = () => {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
 
-  // Realtime subscription for dashboard auto-refresh
-  useEffect(() => {
-    if (!user) return;
-    const channel = supabase
-      .channel("dashboard-realtime")
-      .on("postgres_changes", { event: "*", schema: "public", table: "email_events" }, () => {
-        queryClient.invalidateQueries({ queryKey: ["emails-sent-today"] });
-        queryClient.invalidateQueries({ queryKey: ["replies-count"] });
-        queryClient.invalidateQueries({ queryKey: ["dashboard-daily"] });
-        queryClient.invalidateQueries({ queryKey: ["recent-contacts"] });
-      })
-      .on("postgres_changes", { event: "*", schema: "public", table: "email_queue" }, () => {
-        queryClient.invalidateQueries({ queryKey: ["emails-sent-today"] });
-        queryClient.invalidateQueries({ queryKey: ["dashboard-daily"] });
-      })
-      .on("postgres_changes", { event: "*", schema: "public", table: "contacts" }, () => {
-        queryClient.invalidateQueries({ queryKey: ["contacts-count"] });
-        queryClient.invalidateQueries({ queryKey: ["recent-contacts"] });
-        queryClient.invalidateQueries({ queryKey: ["replies-count"] });
-      })
-      .subscribe();
-    return () => { supabase.removeChannel(channel); };
-  }, [user, queryClient]);
-
-  const { data: contacts } = useQuery({
-    queryKey: ["contacts-count", user?.id],
+  const { data: stats, isLoading } = useQuery({
+    queryKey: ["dashboard-stats", user?.id],
     queryFn: async () => {
-      const { count } = await supabase.from("contacts").select("*", { count: "exact", head: true });
-      return count || 0;
+      return await api.dashboard.stats();
     },
     enabled: !!user,
+    refetchInterval: 10000 // Poll every 10 seconds since we removed Realtime
   });
 
-  const { data: campaigns } = useQuery({
-    queryKey: ["campaigns-active", user?.id],
-    queryFn: async () => {
-      const { data } = await supabase.from("campaigns").select("*").eq("status", "Running");
-      return data || [];
-    },
-    enabled: !!user,
-  });
+  const contactsCount = stats?.contactsCount || 0;
+  const campaigns = stats?.activeCampaigns || [];
+  const emailsSentToday = stats?.emailsSentToday || 0;
+  const replies = stats?.repliesCount || 0;
+  const engagementStats = stats?.engagement || { totalSent: 0, uniqueOpens: 0, uniqueClicks: 0, openRate: "0", clickRate: "0" };
+  const recentContacts = stats?.recentContacts || [];
+  const campaignList = stats?.campaignList || [];
+  const emailData = stats?.chartData || [];
 
-  const { data: emailsSentToday } = useQuery({
-    queryKey: ["emails-sent-today", user?.id],
-    queryFn: async () => {
-      const today = new Date().toISOString().split("T")[0];
-      const { count } = await supabase
-        .from("email_queue")
-        .select("*", { count: "exact", head: true })
-        .eq("status", "sent")
-        .gte("sent_at", today);
-      return count || 0;
-    },
-    enabled: !!user,
-  });
-
-  const { data: replies } = useQuery({
-    queryKey: ["replies-count", user?.id],
-    queryFn: async () => {
-      const { count } = await supabase
-        .from("contacts")
-        .select("*", { count: "exact", head: true })
-        .eq("status", "Replied");
-      return count || 0;
-    },
-    enabled: !!user,
-  });
-
-  const { data: engagementStats } = useQuery({
-    queryKey: ["dashboard-engagement", user?.id],
-    queryFn: async () => {
-      const [sentRes, eventsRes] = await Promise.all([
-        supabase.from("email_queue").select("*", { count: "exact", head: true }).eq("status", "sent"),
-        supabase.from("email_events").select("contact_id, event_type"),
-      ]);
-      const totalSent = sentRes.count || 0;
-      const events = eventsRes.data || [];
-      const uniqueOpens = new Set(events.filter((e) => e.event_type === "open").map((e) => e.contact_id)).size;
-      const uniqueClicks = new Set(events.filter((e) => e.event_type === "click").map((e) => e.contact_id)).size;
-      return {
-        totalSent,
-        uniqueOpens,
-        uniqueClicks,
-        openRate: totalSent > 0 ? ((uniqueOpens / totalSent) * 100).toFixed(1) : "0",
-        clickRate: totalSent > 0 ? ((uniqueClicks / totalSent) * 100).toFixed(1) : "0",
-      };
-    },
-    enabled: !!user,
-  });
-
-  const { data: recentContacts } = useQuery({
-    queryKey: ["recent-contacts", user?.id],
-    queryFn: async () => {
-      const { data } = await supabase
-        .from("contacts")
-        .select("*")
-        .order("updated_at", { ascending: false })
-        .limit(5);
-      return data || [];
-    },
-    enabled: !!user,
-  });
-
-  const { data: campaignList } = useQuery({
-    queryKey: ["campaigns-list", user?.id],
-    queryFn: async () => {
-      const { data } = await supabase.from("campaigns").select("*").order("created_at", { ascending: false }).limit(5);
-      return data || [];
-    },
-    enabled: !!user,
-  });
-
-  // Real chart data - last 7 days from email_queue and email_events
-  const { data: emailData = [] } = useQuery({
-    queryKey: ["dashboard-daily", user?.id],
-    queryFn: async () => {
-      const days = 7;
-      const promises = [];
-      
-      for (let i = days - 1; i >= 0; i--) {
-        const date = new Date();
-        date.setDate(date.getDate() - i);
-        const dayStr = date.toISOString().split("T")[0];
-        const nextDay = new Date(date);
-        nextDay.setDate(nextDay.getDate() + 1);
-        const nextDayStr = nextDay.toISOString().split("T")[0];
-
-        promises.push(
-          Promise.all([
-            supabase.from("email_queue").select("*", { count: "exact", head: true })
-              .eq("status", "sent").gte("sent_at", dayStr).lt("sent_at", nextDayStr),
-            supabase.from("email_events").select("*", { count: "exact", head: true })
-              .eq("event_type", "open").gte("created_at", dayStr).lt("created_at", nextDayStr),
-          ]).then(([sentRes, repliesRes]) => ({
-            date: date.toLocaleDateString("en", { weekday: "short" }),
-            sent: sentRes.count || 0,
-            opens: repliesRes.count || 0,
-          }))
-        );
-      }
-      
-      return await Promise.all(promises);
-    },
-    enabled: !!user,
-  });
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center h-[calc(100vh-2rem)]">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+      </div>
+    );
+  }
 
   return (
     <div>
@@ -195,9 +75,9 @@ const Dashboard = () => {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-5">
-        <StatCard icon={Users} title="Total Contacts" value={contacts?.toLocaleString() || "0"} />
+        <StatCard icon={Users} title="Total Contacts" value={contactsCount.toLocaleString()} />
         <StatCard icon={Send} title="Active Campaigns" value={campaigns?.length || 0} />
-        <StatCard icon={Mail} title="Emails Sent Today" value={emailsSentToday || 0} />
+        <StatCard icon={Mail} title="Emails Sent Today" value={emailsSentToday.toLocaleString()} />
         <StatCard icon={Eye} title="Open Rate" value={`${engagementStats?.openRate || 0}%`} change={`${engagementStats?.uniqueOpens || 0} unique opens`} changeType="positive" />
         <StatCard icon={MousePointerClick} title="Click Rate" value={`${engagementStats?.clickRate || 0}%`} change={`${engagementStats?.uniqueClicks || 0} unique clicks`} changeType="positive" />
         <StatCard icon={MessageSquare} title="Total Replies" value={replies || 0} />

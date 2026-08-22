@@ -29,8 +29,7 @@ import {
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useAuth } from "@/contexts/AuthContext";
-import { supabase } from "@/integrations/supabase/client";
-import type { Database } from "@/integrations/supabase/types";
+import { api } from "@/lib/api";
 import TemplatePreview from "@/components/TemplatePreview";
 import EmptyState from "@/components/EmptyState";
 import { replaceTemplateVariables } from "@/lib/template-presets";
@@ -120,14 +119,7 @@ const ContentGallery = ({ variant }: ContentGalleryProps) => {
 
   const { data: allItems = [], isLoading } = useQuery({
     queryKey: [config.queryKey, user?.id],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("email_templates")
-        .select("*")
-        .order("created_at", { ascending: false });
-      if (error) throw error;
-      return data as ContentRow[];
-    },
+    queryFn: () => api.templates.list(),
     enabled: !!user,
   });
 
@@ -150,8 +142,7 @@ const ContentGallery = ({ variant }: ContentGalleryProps) => {
 
   const duplicate = useMutation({
     mutationFn: async (t: ContentRow) => {
-      const { error } = await supabase.from("email_templates").insert({
-        user_id: user!.id,
+      await api.templates.create({
         name: `${t.name} (Copy)`,
         subject: t.subject,
         body: t.body,
@@ -162,8 +153,7 @@ const ContentGallery = ({ variant }: ContentGalleryProps) => {
         blocks: t.blocks,
         category: isForms ? FORM_CATEGORY : t.category === FORM_CATEGORY ? "general" : t.category,
         tags: t.tags,
-      } as Database["public"]["Tables"]["email_templates"]["Insert"]);
-      if (error) throw error;
+      });
     },
     onSuccess: () => {
       invalidate();
@@ -174,8 +164,7 @@ const ContentGallery = ({ variant }: ContentGalleryProps) => {
 
   const remove = useMutation({
     mutationFn: async (id: string) => {
-      const { error } = await supabase.from("email_templates").delete().eq("id", id);
-      if (error) throw error;
+      await api.templates.delete(id);
     },
     onSuccess: () => {
       invalidate();

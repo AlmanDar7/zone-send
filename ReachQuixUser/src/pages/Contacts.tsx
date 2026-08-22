@@ -22,7 +22,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSepara
 import StatusBadge from "@/components/StatusBadge";
 import { motion } from "framer-motion";
 import { useAuth } from "@/contexts/AuthContext";
-import { supabase } from "@/integrations/supabase/client";
+import { api } from "@/lib/api";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import * as XLSX from "xlsx";
@@ -77,11 +77,7 @@ const Contacts = () => {
   const { data: contacts = [], isLoading } = useQuery({
     queryKey: ["contacts", user?.id],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("contacts")
-        .select("*, campaigns(name)")
-        .order("created_at", { ascending: false });
-      if (error) throw error;
+      const data = await api.contacts.list();
       return data;
     },
     enabled: !!user,
@@ -90,8 +86,7 @@ const Contacts = () => {
   const { data: campaigns = [] } = useQuery({
     queryKey: ["campaign-options", user?.id],
     queryFn: async () => {
-      const { data, error } = await supabase.from("campaigns").select("id, name").order("created_at", { ascending: false });
-      if (error) throw error;
+      const data = await api.campaigns.list();
       return data;
     },
     enabled: !!user,
@@ -100,11 +95,7 @@ const Contacts = () => {
   const { data: folders = [] } = useQuery({
     queryKey: ["contact-folders", user?.id],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("contact_folders")
-        .select("*")
-        .order("created_at", { ascending: true });
-      if (error) throw error;
+      const data = await api.contacts.folders.list();
       return data;
     },
     enabled: !!user,
@@ -113,10 +104,7 @@ const Contacts = () => {
   const { data: folderMembers = [] } = useQuery({
     queryKey: ["contact-folder-members", user?.id],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("contact_folder_members")
-        .select("*");
-      if (error) throw error;
+      const data = await api.contacts.folderMembers.list();
       return data;
     },
     enabled: !!user,
@@ -125,8 +113,7 @@ const Contacts = () => {
   const { data: tags = [] } = useQuery({
     queryKey: ["tags", user?.id],
     queryFn: async () => {
-      const { data, error } = await supabase.from("tags").select("*").order("name");
-      if (error) throw error;
+      const data = await api.contacts.tags.list();
       return data;
     },
     enabled: !!user,
@@ -135,8 +122,7 @@ const Contacts = () => {
   const { data: contactTags = [] } = useQuery({
     queryKey: ["contact_tags", user?.id],
     queryFn: async () => {
-      const { data, error } = await supabase.from("contact_tags").select("*");
-      if (error) throw error;
+      const data = await api.contacts.contactTags.list();
       return data;
     },
     enabled: !!user,
@@ -165,8 +151,7 @@ const Contacts = () => {
   // Folder mutations
   const createFolder = useMutation({
     mutationFn: async (name: string) => {
-      const { error } = await supabase.from("contact_folders").insert({ user_id: user!.id, name });
-      if (error) throw error;
+      await api.contacts.folders.create({ name });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["contact-folders"] });
@@ -179,8 +164,7 @@ const Contacts = () => {
 
   const renameFolder = useMutation({
     mutationFn: async ({ id, name }: { id: string; name: string }) => {
-      const { error } = await supabase.from("contact_folders").update({ name }).eq("id", id);
-      if (error) throw error;
+      await api.contacts.folders.update(id, { name });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["contact-folders"] });
@@ -194,8 +178,7 @@ const Contacts = () => {
 
   const deleteFolder = useMutation({
     mutationFn: async (id: string) => {
-      const { error } = await supabase.from("contact_folders").delete().eq("id", id);
-      if (error) throw error;
+      await api.contacts.folders.delete(id);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["contact-folders"] });
@@ -208,9 +191,7 @@ const Contacts = () => {
 
   const addContactsToFolder = useMutation({
     mutationFn: async ({ folderId, contactIds }: { folderId: string; contactIds: string[] }) => {
-      const rows = contactIds.map((contact_id) => ({ folder_id: folderId, contact_id }));
-      const { error } = await supabase.from("contact_folder_members").upsert(rows, { onConflict: "folder_id,contact_id" });
-      if (error) throw error;
+      await api.contacts.folderMembers.assign({ folderId, contactIds });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["contact-folder-members"] });
@@ -224,12 +205,7 @@ const Contacts = () => {
 
   const removeFromFolder = useMutation({
     mutationFn: async ({ folderId, contactIds }: { folderId: string; contactIds: string[] }) => {
-      const { error } = await supabase
-        .from("contact_folder_members")
-        .delete()
-        .eq("folder_id", folderId)
-        .in("contact_id", contactIds);
-      if (error) throw error;
+      await api.contacts.folderMembers.remove({ folderId, contactIds });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["contact-folder-members"] });
@@ -242,8 +218,7 @@ const Contacts = () => {
   // Tag mutations
   const createTag = useMutation({
     mutationFn: async ({ name, color }: { name: string; color: string }) => {
-      const { error } = await supabase.from("tags").insert({ user_id: user!.id, name, color });
-      if (error) throw error;
+      await api.contacts.tags.create({ name, color });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["tags"] });
@@ -255,8 +230,7 @@ const Contacts = () => {
 
   const deleteTag = useMutation({
     mutationFn: async (id: string) => {
-      const { error } = await supabase.from("tags").delete().eq("id", id);
-      if (error) throw error;
+      await api.contacts.tags.delete(id);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["tags"] });
@@ -269,10 +243,7 @@ const Contacts = () => {
 
   const assignTags = useMutation({
     mutationFn: async ({ contactIds, tagIds }: { contactIds: string[]; tagIds: string[] }) => {
-      const rows = contactIds.flatMap((contact_id) => tagIds.map(tag_id => ({ contact_id, tag_id })));
-      if (rows.length === 0) return;
-      const { error } = await supabase.from("contact_tags").upsert(rows, { onConflict: "contact_id,tag_id" });
-      if (error) throw error;
+      await api.contacts.contactTags.assign({ contactIds, tagIds });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["contact_tags"] });
@@ -286,8 +257,7 @@ const Contacts = () => {
 
   const removeTagFromContact = useMutation({
     mutationFn: async ({ contactId, tagId }: { contactId: string; tagId: string }) => {
-      const { error } = await supabase.from("contact_tags").delete().eq("contact_id", contactId).eq("tag_id", tagId);
-      if (error) throw error;
+      await api.contacts.contactTags.remove(contactId, tagId);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["contact_tags"] });
@@ -299,20 +269,18 @@ const Contacts = () => {
   // Contact mutations (unchanged)
   const addContact = useMutation({
     mutationFn: async () => {
-      const { data, error } = await supabase.from("contacts").insert({
-        user_id: user!.id,
+      const data = await api.contacts.create({
         name: newName,
         email: newEmail,
         company_name: newCompany || null,
         campaign_id: newCampaignId === "none" ? null : newCampaignId,
-      }).select("id").single();
-      if (error) throw error;
+      });
       return data;
     },
     onSuccess: async (data) => {
       // If inside a folder, auto-add to that folder
       if (activeFolder && data?.id) {
-        await supabase.from("contact_folder_members").insert({ folder_id: activeFolder, contact_id: data.id });
+        await api.contacts.folderMembers.assign({ folderId: activeFolder, contactIds: [data.id] });
         queryClient.invalidateQueries({ queryKey: ["contact-folder-members"] });
       }
       queryClient.invalidateQueries({ queryKey: ["contacts"] });
@@ -328,11 +296,7 @@ const Contacts = () => {
 
   const linkContactCampaign = useMutation({
     mutationFn: async ({ contactId, campaignId }: { contactId: string; campaignId: string }) => {
-      const { error } = await supabase
-        .from("contacts")
-        .update({ campaign_id: campaignId === "none" ? null : campaignId })
-        .eq("id", contactId);
-      if (error) throw error;
+      await api.contacts.update(contactId, { campaign_id: campaignId === "none" ? null : campaignId });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["contacts"] });
@@ -346,8 +310,7 @@ const Contacts = () => {
 
   const renameContact = useMutation({
     mutationFn: async ({ id, name }: { id: string; name: string }) => {
-      const { error } = await supabase.from("contacts").update({ name }).eq("id", id);
-      if (error) throw error;
+      await api.contacts.update(id, { name });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["contacts"] });
@@ -361,8 +324,7 @@ const Contacts = () => {
 
   const deleteContact = useMutation({
     mutationFn: async (id: string) => {
-      const { error } = await supabase.from("contacts").delete().eq("id", id);
-      if (error) throw error;
+      await api.contacts.delete(id);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["contacts"] });
@@ -370,10 +332,11 @@ const Contacts = () => {
     },
   });
 
-  const bulkDelete = useMutation({
+  const bulkDeleteContacts = useMutation({
     mutationFn: async (ids: string[]) => {
-      const { error } = await supabase.from("contacts").delete().in("id", ids);
-      if (error) throw error;
+      for (const id of ids) {
+        await api.contacts.delete(id);
+      }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["contacts"] });
@@ -384,13 +347,11 @@ const Contacts = () => {
     onError: (err: any) => toast.error(err.message),
   });
 
-  const bulkAssign = useMutation({
-    mutationFn: async ({ ids, campaignId }: { ids: string[]; campaignId: string }) => {
-      const { error } = await supabase
-        .from("contacts")
-        .update({ campaign_id: campaignId === "none" ? null : campaignId })
-        .in("id", ids);
-      if (error) throw error;
+  const bulkLinkCampaign = useMutation({
+    mutationFn: async ({ contactIds, campaignId }: { contactIds: string[]; campaignId: string }) => {
+      for (const id of contactIds) {
+        await api.contacts.update(id, { campaign_id: campaignId === "none" ? null : campaignId });
+      }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["contacts"] });
@@ -410,7 +371,6 @@ const Contacts = () => {
         .map((line) => {
           const parts = line.split(",").map((p) => p.trim());
           return {
-            user_id: user!.id,
             name: parts[0] || "",
             email: parts[1] || "",
             company_name: parts[2] || null,
@@ -419,15 +379,13 @@ const Contacts = () => {
         })
         .filter((r) => r.email);
       if (rows.length === 0) throw new Error("No valid rows found");
-      const { data, error } = await supabase.from("contacts").insert(rows).select("id");
-      if (error) throw error;
+      const insertedContacts = await api.contacts.bulkCreate(rows);
       // Auto-add to active folder
-      if (activeFolder && data && data.length > 0) {
-        const memberRows = data.map((c: any) => ({ folder_id: activeFolder, contact_id: c.id }));
-        await supabase.from("contact_folder_members").insert(memberRows);
+      if (activeFolder && insertedContacts && insertedContacts.length > 0) {
+        await api.contacts.folderMembers.assign({ folderId: activeFolder, contactIds: insertedContacts });
         queryClient.invalidateQueries({ queryKey: ["contact-folder-members"] });
       }
-      return data?.length || rows.length;
+      return insertedContacts?.length || rows.length;
     },
     onSuccess: (count) => {
       queryClient.invalidateQueries({ queryKey: ["contacts"] });
@@ -453,7 +411,6 @@ const Contacts = () => {
           const name = row["Name"] || row["name"] || row["NAME"] || "";
           const email = row["Email"] || row["email"] || row["EMAIL"] || row["E-mail"] || "";
           return {
-            user_id: user!.id,
             name: String(name).trim(),
             email: String(email).trim(),
             company_name: row["Company"] || row["company"] || null,
@@ -467,16 +424,14 @@ const Contacts = () => {
         toast.error("No valid rows found. Make sure columns are named 'Name' and 'Email'.");
         return;
       }
-      const { data: inserted, error } = await supabase.from("contacts").insert(rows).select("id");
-      if (error) throw error;
+      const insertedContacts = await api.contacts.bulkCreate(rows);
       // Auto-add to active folder
-      if (activeFolder && inserted && inserted.length > 0) {
-        const memberRows = inserted.map((c: any) => ({ folder_id: activeFolder, contact_id: c.id }));
-        await supabase.from("contact_folder_members").insert(memberRows);
+      if (activeFolder && insertedContacts && insertedContacts.length > 0) {
+        await api.contacts.folderMembers.assign({ folderId: activeFolder, contactIds: insertedContacts });
         queryClient.invalidateQueries({ queryKey: ["contact-folder-members"] });
       }
       queryClient.invalidateQueries({ queryKey: ["contacts"] });
-      toast.success(`Imported ${inserted?.length || rows.length} contacts from Excel!`);
+      toast.success(`Imported ${insertedContacts?.length || rows.length} contacts from Excel!`);
       setExcelCampaignId("none");
     } catch (err: any) {
       toast.error(err.message || "Failed to parse Excel file");
@@ -486,8 +441,7 @@ const Contacts = () => {
 
   const syncGoogleSheets = async () => {
     try {
-      const { data, error } = await supabase.functions.invoke("sync-google-sheets");
-      if (error) throw error;
+      const data = await api.ai.syncGoogleSheets();
       queryClient.invalidateQueries({ queryKey: ["contacts"] });
       toast.success(data?.message || "Sync complete!");
     } catch (err: any) {
@@ -982,10 +936,10 @@ const Contacts = () => {
                   </SelectContent>
                 </Select>
                 <Button
-                  onClick={() => bulkAssign.mutate({ ids: Array.from(selectedIds), campaignId: bulkCampaignId })}
-                  disabled={bulkAssign.isPending}
+                  onClick={() => bulkLinkCampaign.mutate({ contactIds: Array.from(selectedIds), campaignId: bulkCampaignId })}
+                  disabled={bulkLinkCampaign.isPending}
                 >
-                  {bulkAssign.isPending ? "Assigning..." : "Assign All"}
+                  {bulkLinkCampaign.isPending ? "Assigning..." : "Assign All"}
                 </Button>
               </div>
             </DialogContent>

@@ -5,8 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useAuth } from "@/contexts/AuthContext";
-import { supabase } from "@/integrations/supabase/client";
-import type { Database } from "@/integrations/supabase/types";
+import { api } from "@/lib/api";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import AIEmailWriter from "@/components/AIEmailWriter";
@@ -20,7 +19,7 @@ import {
   type TemplateVariableValues,
 } from "@/lib/template-presets";
 
-type EmailTemplateRow = Database["public"]["Tables"]["email_templates"]["Row"] & { preview_text?: string | null };
+type EmailTemplateRow = any;
 
 type EmailFormState = {
   name: string;
@@ -91,8 +90,7 @@ const EmailBuilder = () => {
   const { data: templates = [] } = useQuery({
     queryKey: ["templates", user?.id],
     queryFn: async () => {
-      const { data, error } = await supabase.from("email_templates").select("*").order("created_at", { ascending: false });
-      if (error) throw error;
+      const data = await api.templates.list('email');
       return data as EmailTemplateRow[];
     },
     enabled: !!user && !!editId,
@@ -134,42 +132,30 @@ const EmailBuilder = () => {
   const saveMutation = useMutation({
     mutationFn: async ({ isNext = false }: { isNext?: boolean }) => {
       if (selectedTemplate) {
-        const { data, error } = await supabase
-          .from("email_templates")
-          .update({
-            name: form.name,
-            subject: form.subject,
-            preview_text: form.preview_text,
-            body: form.body,
-            type: form.type,
-            category: form.category,
-            template_format: form.template_format,
-            html_body: form.html_body,
-            design_config: form.design_config,
-          })
-          .eq("id", selectedTemplate.id)
-          .select("id")
-          .single();
-        if (error) throw error;
+        const { data } = await api.templates.update(selectedTemplate.id, {
+          name: form.name,
+          subject: form.subject,
+          preview_text: form.preview_text,
+          body: form.body,
+          type: form.type,
+          category: form.category,
+          template_format: form.template_format,
+          html_body: form.html_body,
+          design_config: form.design_config,
+        });
         return { data, isNext };
       } else {
-        const { data, error } = await supabase
-          .from("email_templates")
-          .insert({
-            user_id: user!.id,
-            name: form.name,
-            subject: form.subject,
-            preview_text: form.preview_text,
-            body: form.body,
-            type: form.type,
-            category: form.category,
-            template_format: form.template_format,
-            html_body: form.html_body,
-            design_config: form.design_config,
-          } as Database["public"]["Tables"]["email_templates"]["Insert"])
-          .select("id")
-          .single();
-        if (error) throw error;
+        const { data } = await api.templates.create({
+          name: form.name,
+          subject: form.subject,
+          preview_text: form.preview_text,
+          body: form.body,
+          type: form.type,
+          category: form.category,
+          template_format: form.template_format,
+          html_body: form.html_body,
+          design_config: form.design_config,
+        });
         return { data, isNext };
       }
     },

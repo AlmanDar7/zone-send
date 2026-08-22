@@ -7,12 +7,10 @@ import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { motion } from "framer-motion";
 import { useAuth } from "@/contexts/AuthContext";
-import { supabase } from "@/integrations/supabase/client";
+import { api } from "@/lib/api";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { getSmtpConfigError, hasUsableSmtpConfig } from "@/lib/smtpValidation";
-import { getAccessToken } from "@/lib/getAccessToken";
-import { getPayloadErrorMessage, getSupabaseFunctionErrorMessage } from "@/lib/supabaseFunctionErrors";
 import { Download, AlertCircle } from "lucide-react";
 
 const SettingsPage = () => {
@@ -27,28 +25,19 @@ const SettingsPage = () => {
 
   const { data: smtpData } = useQuery({
     queryKey: ["smtp-settings", user?.id],
-    queryFn: async () => {
-      const { data } = await supabase.from("smtp_settings").select("*").maybeSingle();
-      return data;
-    },
+    queryFn: () => api.settings.smtp.get(),
     enabled: !!user,
   });
 
   const { data: sheetData } = useQuery({
     queryKey: ["sheet-settings", user?.id],
-    queryFn: async () => {
-      const { data } = await supabase.from("google_sheet_settings").select("*").maybeSingle();
-      return data;
-    },
+    queryFn: () => api.settings.googleSheets.get(),
     enabled: !!user,
   });
 
   const { data: limitData } = useQuery({
     queryKey: ["sending-limits", user?.id],
-    queryFn: async () => {
-      const { data } = await supabase.from("sending_limits").select("*").maybeSingle();
-      return data;
-    },
+    queryFn: () => api.settings.sendingLimits.get(),
     enabled: !!user,
   });
 
@@ -66,7 +55,7 @@ const SettingsPage = () => {
   }, [user, testEmail]);
 
   useEffect(() => {
-    if (sheetData) setSheet({ sheet_url: sheetData.sheet_url || "", service_account_json: sheetData.service_account_json || "" });
+    if (sheetData) setSheet({ sheet_url: sheetData.sheet_url || "", service_account_json: sheetData.credentials_json || "" });
   }, [sheetData]);
 
   useEffect(() => {
@@ -82,7 +71,6 @@ const SettingsPage = () => {
   const upsertSmtpSettings = async () => {
     const port = parseInt(smtp.port, 10);
     const payload = {
-      user_id: user!.id,
       host: smtp.host.trim(),
       port,
       username: smtp.username.trim(),
@@ -96,13 +84,7 @@ const SettingsPage = () => {
       throw new Error(getSmtpConfigError());
     }
 
-    if (smtpData) {
-      const { error } = await supabase.from("smtp_settings").update(payload).eq("user_id", user!.id);
-      if (error) throw error;
-    } else {
-      const { error } = await supabase.from("smtp_settings").insert(payload);
-      if (error) throw error;
-    }
+    await api.settings.smtp.save(payload);
   };
 
   const saveSmtp = useMutation({
@@ -114,45 +96,12 @@ const SettingsPage = () => {
   const sendTestEmail = useMutation({
     mutationFn: async () => {
       if (!testEmail.trim()) throw new Error("Enter a test recipient email");
-
-      const accessToken = await getAccessToken();
-      if (!accessToken) {
-        throw new Error("You must be logged in to send a test email.");
-      }
-
       await upsertSmtpSettings();
-
-      const sendPromise = supabase.functions.invoke("send-email", {
-        headers: {
-          Authorization: `Bearer ${accessToken}`,
-        },
-        body: {
-          to: testEmail.trim(),
-          subject: "Reachquix SMTP test",
-          body: "This is a test email sent from your Reachquix SMTP configuration.",
-        },
+      await api.settings.testEmail({
+        to: testEmail.trim(),
+        subject: "Reachquix SMTP test",
+        body: "This is a test email sent from your Reachquix SMTP configuration.",
       });
-
-      const result = await Promise.race([
-        sendPromise,
-        new Promise<never>((_, reject) => {
-          window.setTimeout(() => {
-            reject(new Error("SMTP test timed out. Check your SMTP host, port, SSL setting, username, and password."));
-          }, 30000);
-        }),
-      ]);
-
-      const { data, error } = result;
-
-      const serverMessage = getPayloadErrorMessage(data);
-      if (serverMessage) {
-        throw new Error(serverMessage);
-      }
-      if (error) {
-        throw new Error(
-          await getSupabaseFunctionErrorMessage(error, "Failed to send test email", data),
-        );
-      }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["smtp-settings"] });
@@ -164,14 +113,11 @@ const SettingsPage = () => {
   const saveSheet = useMutation({
     mutationFn: async () => {
       const sheetId = sheet.sheet_url.match(/\/d\/([a-zA-Z0-9-_]+)/)?.[1] || null;
-      const payload = { user_id: user!.id, sheet_url: sheet.sheet_url, sheet_id: sheetId, service_account_json: sheet.service_account_json };
-      if (sheetData) {
-        const { error } = await supabase.from("google_sheet_settings").update(payload).eq("user_id", user!.id);
-        if (error) throw error;
-      } else {
-        const { error } = await supabase.from("google_sheet_settings").insert(payload);
-        if (error) throw error;
-      }
+      await api.settings.googleSheets.save({
+        sheet_url: sheet.sheet_url,
+        sheet_id: sheetId,
+        credentials_json: sheet.service_account_json,
+      });
     },
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["sheet-settings"] }); toast.success("Google Sheet settings saved!"); },
     onError: (err: any) => toast.error(err.message),
@@ -179,14 +125,7 @@ const SettingsPage = () => {
 
   const saveLimit = useMutation({
     mutationFn: async () => {
-      const payload = { user_id: user!.id, max_per_day: parseInt(limit) || 500 };
-      if (limitData) {
-        const { error } = await supabase.from("sending_limits").update(payload).eq("user_id", user!.id);
-        if (error) throw error;
-      } else {
-        const { error } = await supabase.from("sending_limits").insert(payload);
-        if (error) throw error;
-      }
+      await api.settings.sendingLimits.save({ max_per_day: parseInt(limit) || 500 });
     },
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["sending-limits"] }); toast.success("Sending limits saved!"); },
     onError: (err: any) => toast.error(err.message),
@@ -194,8 +133,8 @@ const SettingsPage = () => {
 
   const exportUserData = async () => {
     try {
-      const { data: contacts } = await supabase.from("contacts").select("*").eq("user_id", user!.id);
-      const { data: campaigns } = await supabase.from("campaigns").select("*").eq("user_id", user!.id);
+      const contacts = await api.contacts.list();
+      const campaigns = await api.campaigns.list();
       const exportData = { contacts, campaigns };
       const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: "application/json" });
       const url = URL.createObjectURL(blob);

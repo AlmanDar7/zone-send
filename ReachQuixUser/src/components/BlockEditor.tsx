@@ -57,7 +57,7 @@ import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/contexts/AuthContext";
-import { supabase } from "@/integrations/supabase/client";
+import { api } from "@/lib/api";
 import { toast } from "sonner";
 import ImageUploader from "@/components/ImageUploader";
 import {
@@ -849,12 +849,8 @@ const BrandThemesPanel = ({
   const { data: themes = [] } = useQuery({
     queryKey: ["brand-themes", user?.id],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("brand_themes")
-        .select("*")
-        .order("created_at", { ascending: false });
-      if (error) throw error;
-      return data as unknown as BrandTheme[];
+      const data = await api.templates.brandThemes.list();
+      return (data || []) as unknown as BrandTheme[];
     },
     enabled: !!user,
   });
@@ -862,23 +858,18 @@ const BrandThemesPanel = ({
   const saveTheme = useMutation({
     mutationFn: async (t: Partial<BrandTheme>) => {
       if (t.id) {
-        const { error } = await supabase
-          .from("brand_themes")
-          .update({
-            name: t.name,
-            brand_name: t.brand_name,
-            primary_color: t.primary_color,
-            background_color: t.background_color,
-            heading_font: t.heading_font,
-            body_font: t.body_font,
-            button_style: t.button_style,
-            footer_style: t.footer_style,
-          })
-          .eq("id", t.id);
-        if (error) throw error;
+        await api.templates.brandThemes.update(t.id, {
+          name: t.name,
+          brand_name: t.brand_name,
+          primary_color: t.primary_color,
+          background_color: t.background_color,
+          heading_font: t.heading_font,
+          body_font: t.body_font,
+          button_style: t.button_style,
+          footer_style: t.footer_style,
+        });
       } else {
-        const { error } = await supabase.from("brand_themes").insert({
-          user_id: user!.id,
+        await api.templates.brandThemes.create({
           name: t.name || "Untitled theme",
           brand_name: t.brand_name || "",
           primary_color: t.primary_color || "#111827",
@@ -888,7 +879,6 @@ const BrandThemesPanel = ({
           button_style: t.button_style || { radius: 999, textColor: "#ffffff", background: "#111827" },
           footer_style: t.footer_style || { text: "", color: "#6b7280", alignment: "center" },
         });
-        if (error) throw error;
       }
     },
     onSuccess: () => {
@@ -901,8 +891,7 @@ const BrandThemesPanel = ({
 
   const deleteTheme = useMutation({
     mutationFn: async (id: string) => {
-      const { error } = await supabase.from("brand_themes").delete().eq("id", id);
-      if (error) throw error;
+      await api.templates.brandThemes.delete(id);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["brand-themes"] });
@@ -1123,25 +1112,19 @@ const SectionsPanel = ({
   const { data: sections = [] } = useQuery({
     queryKey: ["template-sections", user?.id],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("template_sections")
-        .select("*")
-        .order("created_at", { ascending: false });
-      if (error) throw error;
-      return data as unknown as SavedSection[];
+      const data = await api.templates.sections.list();
+      return (data || []) as unknown as SavedSection[];
     },
     enabled: !!user,
   });
 
   const saveSection = useMutation({
     mutationFn: async () => {
-      const { error } = await supabase.from("template_sections").insert({
-        user_id: user!.id,
+      await api.templates.sections.create({
         name: name || "Untitled section",
         category,
         blocks: doc.blocks as unknown as Block[],
       });
-      if (error) throw error;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["template-sections"] });
@@ -1154,8 +1137,7 @@ const SectionsPanel = ({
 
   const deleteSection = useMutation({
     mutationFn: async (id: string) => {
-      const { error } = await supabase.from("template_sections").delete().eq("id", id);
-      if (error) throw error;
+      await api.templates.sections.delete(id);
     },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["template-sections"] }),
   });

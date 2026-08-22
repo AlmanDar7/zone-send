@@ -7,7 +7,7 @@ import { FORM_CATEGORY } from "@/lib/content-types";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useQuery } from "@tanstack/react-query";
-import { supabase } from "@/integrations/supabase/client";
+import { api } from "@/lib/api";
 import { useAuth } from "@/contexts/AuthContext";
 import { useState, useMemo } from "react";
 import TemplatePreview from "@/components/TemplatePreview";
@@ -50,15 +50,7 @@ const TemplateGallery = ({ category }: Props) => {
 
   const { data: folders = [] } = useQuery({
     queryKey: ["contact_folders", user?.id],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("contact_folders")
-        .select("id, name")
-        .eq("user_id", user!.id)
-        .order("created_at", { ascending: false });
-      if (error) throw error;
-      return data;
-    },
+    queryFn: () => api.contacts.folders.list(),
     enabled: !!user && category === "form",
   });
   

@@ -3,9 +3,8 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { motion } from "framer-motion";
 import { UserCircle2, Lock, Trash2 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
-import { supabase } from "@/integrations/supabase/client";
+import { api } from "@/lib/api";
 import { deleteFirebaseUser, updateUserPassword, updateUserProfile } from "@/lib/firebaseAuth";
-import { getAccessToken } from "@/lib/getAccessToken";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -34,13 +33,7 @@ const Profile = () => {
     queryKey: ["profile", user?.id],
     enabled: !!user,
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("profiles")
-        .select("id, full_name")
-        .eq("user_id", user!.id)
-        .maybeSingle();
-
-      if (error) throw error;
+      const data = await api.profile.get();
       return data;
     },
   });
@@ -62,23 +55,7 @@ const Profile = () => {
       const trimmedName = fullName.trim();
 
       if (!trimmedName) throw new Error("Name is required.");
-
-      if (profile) {
-        const { error } = await supabase
-          .from("profiles")
-          .update({ full_name: trimmedName })
-          .eq("user_id", user!.id);
-
-        if (error) throw error;
-      } else {
-        const { error } = await supabase.from("profiles").insert({
-          user_id: user!.id,
-          full_name: trimmedName,
-        });
-
-        if (error) throw error;
-      }
-
+      await api.profile.save({ full_name: trimmedName });
       await updateUserProfile({ displayName: trimmedName });
     },
     onSuccess: async () => {
@@ -109,15 +86,7 @@ const Profile = () => {
 
   const deleteAccount = useMutation({
     mutationFn: async () => {
-      const accessToken = await getAccessToken();
-      if (!accessToken) throw new Error("You must be signed in to delete your account.");
-
-      const { error } = await supabase.functions.invoke("delete-account", {
-        headers: { Authorization: `Bearer ${accessToken}` },
-        body: {},
-      });
-
-      if (error) throw error;
+      await api.profile.deleteAccount();
       await deleteFirebaseUser();
     },
     onSuccess: async () => {

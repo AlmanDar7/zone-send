@@ -1,6 +1,6 @@
 import { useAuth } from "@/contexts/AuthContext";
-import { supabase } from "@/integrations/supabase/client";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { api } from "@/lib/api";
+import { useQuery } from "@tanstack/react-query";
 import { Eye, MousePointerClick, MessageSquare, AlertTriangle, TrendingUp } from "lucide-react";
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from "recharts";
 import StatCard from "@/components/StatCard";
@@ -11,7 +11,6 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 
 const Analytics = () => {
   const { user } = useAuth();
-  const queryClient = useQueryClient();
   const [searchParams, setSearchParams] = useSearchParams();
   const [selectedCampaign, setSelectedCampaign] = useState<string>(
     () => searchParams.get("campaign") || "all",
@@ -33,207 +32,35 @@ const Analytics = () => {
     }
   };
 
-  useEffect(() => {
-    if (!user) return;
-    const channel = supabase
-      .channel("analytics-realtime")
-      .on("postgres_changes", { event: "*", schema: "public", table: "email_events" }, () => {
-        queryClient.invalidateQueries({ queryKey: ["analytics-stats"] });
-        queryClient.invalidateQueries({ queryKey: ["analytics-daily"] });
-        queryClient.invalidateQueries({ queryKey: ["top-contacts"] });
-      })
-      .on("postgres_changes", { event: "*", schema: "public", table: "email_queue" }, () => {
-        queryClient.invalidateQueries({ queryKey: ["analytics-stats"] });
-        queryClient.invalidateQueries({ queryKey: ["analytics-daily"] });
-      })
-      .subscribe();
-    return () => { supabase.removeChannel(channel); };
-  }, [user, queryClient]);
-
-  const { data: campaigns = [] } = useQuery({
-    queryKey: ["campaigns-analytics", user?.id],
-    queryFn: async () => {
-      const { data } = await supabase
-        .from("campaigns")
-        .select("id, name")
-        .eq("user_id", user!.id)
-        .order("created_at", { ascending: false });
-      return data || [];
-    },
+  const { data: analyticsData } = useQuery({
+    queryKey: ["analytics-all", user?.id, selectedCampaign],
+    queryFn: () => api.analytics.get(selectedCampaign),
     enabled: !!user,
+    refetchInterval: 15000,
   });
+
+  const campaigns = analyticsData?.campaigns || [];
+  const stats = analyticsData ? {
+    totalSent: analyticsData.totalSent,
+    totalOpens: analyticsData.totalOpens,
+    uniqueOpens: analyticsData.uniqueOpens,
+    totalClicks: analyticsData.totalClicks,
+    uniqueClicks: analyticsData.uniqueClicks,
+    replies: analyticsData.replies,
+    bounces: analyticsData.bounces,
+    openRate: analyticsData.openRate,
+    clickRate: analyticsData.clickRate,
+    replyRate: analyticsData.replyRate,
+    bounceRate: analyticsData.bounceRate,
+  } : undefined;
+  const dailyData = analyticsData?.dailyData || [];
+  const growthData = analyticsData?.growthData || [];
+  const topContacts = analyticsData?.topContacts || [];
 
   const selectedCampaignName =
     selectedCampaign === "all"
       ? null
       : campaigns.find((c: { id: string }) => c.id === selectedCampaign)?.name;
-
-  const { data: stats } = useQuery({
-    queryKey: ["analytics-stats", user?.id, selectedCampaign],
-    queryFn: async () => {
-      let sentQuery = supabase
-        .from("email_queue")
-        .select("*", { count: "exact", head: true })
-        .eq("user_id", user!.id)
-        .eq("status", "sent");
-      let eventsQuery = supabase.from("email_events").select("*").eq("user_id", user!.id);
-      let repliedQuery = supabase
-        .from("contacts")
-        .select("*", { count: "exact", head: true })
-        .eq("user_id", user!.id)
-        .eq("status", "Replied");
-      let bouncedQuery = supabase
-        .from("contacts")
-        .select("*", { count: "exact", head: true })
-        .eq("user_id", user!.id)
-        .eq("status", "Bounced");
-
-      if (selectedCampaign !== "all") {
-        sentQuery = sentQuery.eq("campaign_id", selectedCampaign);
-        eventsQuery = eventsQuery.eq("campaign_id", selectedCampaign);
-        repliedQuery = repliedQuery.eq("campaign_id", selectedCampaign);
-        bouncedQuery = bouncedQuery.eq("campaign_id", selectedCampaign);
-      }
-
-      const [sentRes, eventsRes, repliedRes, bouncedRes] = await Promise.all([
-        sentQuery,
-        eventsQuery,
-        repliedQuery,
-        bouncedQuery,
-      ]);
-
-      const events = eventsRes.data || [];
-      const opens = events.filter((e) => e.event_type === "open");
-      const clicks = events.filter((e) => e.event_type === "click");
-      const uniqueOpens = new Set(opens.map((e) => e.contact_id)).size;
-      const uniqueClicks = new Set(clicks.map((e) => e.contact_id)).size;
-      const totalSent = sentRes.count || 0;
-
-      return {
-        totalSent,
-        totalOpens: opens.length,
-        uniqueOpens,
-        totalClicks: clicks.length,
-        uniqueClicks,
-        replies: repliedRes.count || 0,
-        bounces: bouncedRes.count || 0,
-        openRate: totalSent > 0 ? ((uniqueOpens / totalSent) * 100).toFixed(1) : "0",
-        clickRate: totalSent > 0 ? ((uniqueClicks / totalSent) * 100).toFixed(1) : "0",
-        replyRate: totalSent > 0 ? (((repliedRes.count || 0) / totalSent) * 100).toFixed(1) : "0",
-        bounceRate: totalSent > 0 ? (((bouncedRes.count || 0) / totalSent) * 100).toFixed(1) : "0",
-      };
-    },
-    enabled: !!user,
-  });
-
-  const { data: dailyData = [] } = useQuery({
-    queryKey: ["analytics-daily", user?.id, selectedCampaign],
-    queryFn: async () => {
-      const days = 7;
-      const result = [];
-      for (let i = days - 1; i >= 0; i--) {
-        const date = new Date();
-        date.setDate(date.getDate() - i);
-        const dayStr = date.toISOString().split("T")[0];
-        const nextDay = new Date(date);
-        nextDay.setDate(nextDay.getDate() + 1);
-        const nextDayStr = nextDay.toISOString().split("T")[0];
-
-        let sentQ = supabase
-          .from("email_queue")
-          .select("*", { count: "exact", head: true })
-          .eq("user_id", user!.id)
-          .eq("status", "sent")
-          .gte("sent_at", dayStr)
-          .lt("sent_at", nextDayStr);
-        let opensQ = supabase
-          .from("email_events")
-          .select("*", { count: "exact", head: true })
-          .eq("user_id", user!.id)
-          .eq("event_type", "open")
-          .gte("created_at", dayStr)
-          .lt("created_at", nextDayStr);
-        let clicksQ = supabase
-          .from("email_events")
-          .select("*", { count: "exact", head: true })
-          .eq("user_id", user!.id)
-          .eq("event_type", "click")
-          .gte("created_at", dayStr)
-          .lt("created_at", nextDayStr);
-
-        if (selectedCampaign !== "all") {
-          sentQ = sentQ.eq("campaign_id", selectedCampaign);
-          opensQ = opensQ.eq("campaign_id", selectedCampaign);
-          clicksQ = clicksQ.eq("campaign_id", selectedCampaign);
-        }
-
-        const [s, o, c] = await Promise.all([sentQ, opensQ, clicksQ]);
-        result.push({
-          date: date.toLocaleDateString("en", { weekday: "short" }),
-          sent: s.count || 0,
-          opens: o.count || 0,
-          clicks: c.count || 0,
-        });
-      }
-      return result;
-    },
-    enabled: !!user,
-  });
-
-  const { data: growthData = [] } = useQuery({
-    queryKey: ["analytics-growth", user?.id, selectedCampaign],
-    queryFn: async () => {
-      const days = 7;
-      const result = [];
-      for (let i = days - 1; i >= 0; i--) {
-        const date = new Date();
-        date.setDate(date.getDate() - i);
-        const dayStr = date.toISOString().split("T")[0];
-        const nextDay = new Date(date);
-        nextDay.setDate(nextDay.getDate() + 1);
-        const nextDayStr = nextDay.toISOString().split("T")[0];
-
-        let query = supabase
-          .from("contacts")
-          .select("*", { count: "exact", head: true })
-          .eq("user_id", user!.id)
-          .gte("created_at", dayStr)
-          .lt("created_at", nextDayStr);
-
-        if (selectedCampaign !== "all") {
-          query = query.eq("campaign_id", selectedCampaign);
-        }
-
-        const res = await query;
-        result.push({
-          date: date.toLocaleDateString("en", { weekday: "short" }),
-          subscribers: res.count || 0,
-        });
-      }
-      return result;
-    },
-    enabled: !!user,
-  });
-
-  const { data: topContacts = [] } = useQuery({
-    queryKey: ["top-contacts", user?.id, selectedCampaign],
-    queryFn: async () => {
-      let query = supabase
-        .from("contacts")
-        .select("id, name, email, lead_score, status")
-        .eq("user_id", user!.id)
-        .order("lead_score", { ascending: false })
-        .limit(10);
-
-      if (selectedCampaign !== "all") {
-        query = query.eq("campaign_id", selectedCampaign);
-      }
-
-      const { data } = await query;
-      return data || [];
-    },
-    enabled: !!user,
-  });
 
   const pieData = stats
     ? [

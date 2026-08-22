@@ -1,5 +1,5 @@
 import { useAuth } from "@/contexts/AuthContext";
-import { supabase } from "@/integrations/supabase/client";
+import { api } from "@/lib/api";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Mail, RefreshCw, Clock, CheckCircle, XCircle, AlertTriangle, Download } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -23,34 +23,22 @@ const EmailQueue = () => {
 
   const { data: campaigns = [] } = useQuery({
     queryKey: ["campaigns-filter", user?.id],
-    queryFn: async () => {
-      const { data } = await supabase.from("campaigns").select("id, name").order("created_at", { ascending: false });
-      return data || [];
-    },
+    queryFn: () => api.campaigns.list(),
     enabled: !!user,
   });
 
   const { data: queueItems = [], isLoading } = useQuery({
     queryKey: ["email-queue", user?.id, statusFilter, campaignFilter],
-    queryFn: async () => {
-      let query = supabase
-        .from("email_queue")
-        .select("*, contacts(name, email), campaigns(name)")
-        .order("created_at", { ascending: false })
-        .limit(200);
-      if (statusFilter !== "all") query = query.eq("status", statusFilter);
-      if (campaignFilter !== "all") query = query.eq("campaign_id", campaignFilter);
-      const { data, error } = await query;
-      if (error) throw error;
-      return data || [];
-    },
+    queryFn: () => api.queue.list({
+      status: statusFilter !== "all" ? statusFilter : undefined,
+      campaign_id: campaignFilter !== "all" ? campaignFilter : undefined,
+    }),
     enabled: !!user,
   });
 
   const retryFailed = useMutation({
     mutationFn: async (id: string) => {
-      const { error } = await supabase.from("email_queue").update({ status: "pending", error_message: null }).eq("id", id);
-      if (error) throw error;
+      await api.queue.retry(id);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["email-queue"] });

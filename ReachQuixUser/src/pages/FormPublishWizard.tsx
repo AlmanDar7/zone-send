@@ -9,7 +9,7 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
 import { useQuery } from "@tanstack/react-query";
-import { supabase } from "@/integrations/supabase/client";
+import { api } from "@/lib/api";
 
 const STEPS = ["Double Opt-in", "Notifications", "Success Action", "Publish"];
 
@@ -27,11 +27,7 @@ const FormPublishWizard = () => {
 
   const { data: form } = useQuery({
     queryKey: ["form", id],
-    queryFn: async () => {
-      const { data, error } = await supabase.from("email_templates").select("name").eq("id", id).single();
-      if (error) throw error;
-      return data;
-    },
+    queryFn: () => api.templates.get(id!),
     enabled: !!id,
   });
 

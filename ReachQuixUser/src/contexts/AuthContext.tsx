@@ -1,6 +1,6 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
 import { onAuthStateChanged } from "firebase/auth";
-import { supabase } from "@/integrations/supabase/client";
+import { api } from "@/lib/api";
 import { getFirebaseAuth } from "@/integrations/firebase/client";
 import { isFirebaseConfigured } from "@/integrations/firebase/config";
 import {
@@ -30,32 +30,21 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [loading, setLoading] = useState(true);
 
   const ensureProfile = async (currentUser: AppUser) => {
-    const { data: existingProfile, error: fetchError } = await supabase
-      .from("profiles")
-      .select("id, full_name")
-      .eq("user_id", currentUser.id)
-      .maybeSingle();
+    try {
+      const existingProfile = await api.profile.get();
+      if (existingProfile) return;
 
-    if (fetchError) {
-      console.error("Failed to load profile:", fetchError.message);
-      return;
-    }
+      const fallbackName =
+        currentUser.displayName ||
+        currentUser.user_metadata?.full_name ||
+        currentUser.email?.split("@")[0] ||
+        null;
 
-    if (existingProfile) return;
-
-    const fallbackName =
-      currentUser.displayName ||
-      currentUser.user_metadata?.full_name ||
-      currentUser.email?.split("@")[0] ||
-      null;
-
-    const { error: insertError } = await supabase.from("profiles").insert({
-      user_id: currentUser.id,
-      full_name: fallbackName,
-    });
-
-    if (insertError) {
-      console.error("Failed to create profile:", insertError.message);
+      await api.profile.save({
+        full_name: fallbackName,
+      });
+    } catch (err: any) {
+      console.error("Failed to ensure profile:", err?.message || err);
     }
   };
 

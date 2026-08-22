@@ -20,8 +20,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/contexts/AuthContext";
-import { supabase } from "@/integrations/supabase/client";
-import type { Database } from "@/integrations/supabase/types";
+import { api } from "@/lib/api";
 import { toast } from "sonner";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
@@ -48,9 +47,9 @@ import {
 import { DEFAULT_VISUAL_SECTION_ORDER } from "@/lib/visual-template-sections";
 import { isEmailContent } from "@/lib/content-types";
 
-type EmailRow = Database["public"]["Tables"]["email_templates"]["Row"] & { preview_text?: string | null };
-type ContactRow = Database["public"]["Tables"]["contacts"]["Row"];
-type FolderRow = Database["public"]["Tables"]["contact_folders"]["Row"];
+type EmailRow = any;
+type ContactRow = any;
+type FolderRow = any;
 
 const STEPS = ["Template", "From", "Subject", "Audience", "Send"];
 const TOTAL_STEPS = STEPS.length;
@@ -133,15 +132,7 @@ const CampaignWizard = () => {
   /* ----------------- Data ----------------- */
   const { data: templates = [], isLoading: tLoad } = useQuery({
     queryKey: ["wizard-templates", user?.id],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("email_templates")
-        .select("*")
-        .eq("user_id", user!.id)
-        .order("created_at", { ascending: false });
-      if (error) throw error;
-      return data as EmailRow[];
-    },
+    queryFn: () => api.templates.list(),
     enabled: !!user,
   });
 
@@ -178,14 +169,7 @@ const CampaignWizard = () => {
 
   const { data: existingCampaigns = [] } = useQuery({
     queryKey: ["campaigns", user?.id],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("campaigns")
-        .select("id, name")
-        .eq("user_id", user!.id);
-      if (error) throw error;
-      return data;
-    },
+    queryFn: () => api.campaigns.list(),
     enabled: !!user,
   });
 
@@ -193,37 +177,28 @@ const CampaignWizard = () => {
 
   const { data: folders = [] } = useQuery({
     queryKey: ["wizard-folders", user?.id],
-    queryFn: async () => {
-      const { data } = await supabase.from("contact_folders").select("*").order("name");
-      return (data || []) as FolderRow[];
-    },
+    queryFn: () => api.contacts.folders.list(),
     enabled: !!user,
   });
 
   const { data: folderMembers = [] } = useQuery({
     queryKey: ["wizard-folder-members", user?.id],
-    queryFn: async () => {
-      const { data } = await supabase.from("contact_folder_members").select("*");
-      return data || [];
-    },
+    queryFn: () => api.contacts.folderMembers.list(),
     enabled: !!user,
   });
 
   const { data: contacts = [] } = useQuery({
     queryKey: ["wizard-contacts", user?.id],
     queryFn: async () => {
-      const { data } = await supabase.from("contacts").select("*").eq("status", "Active").order("name");
-      return (data || []) as ContactRow[];
+      const all = await api.contacts.list();
+      return (all || []).filter((c: any) => c.status === 'Active' || c.status === 'active');
     },
     enabled: !!user,
   });
 
   const { data: smtp } = useQuery({
     queryKey: ["wizard-smtp", user?.id],
-    queryFn: async () => {
-      const { data } = await supabase.from("smtp_settings").select("*").maybeSingle();
-      return data;
-    },
+    queryFn: () => api.settings.smtp.get(),
     enabled: !!user,
   });
 
@@ -355,9 +330,10 @@ const CampaignWizard = () => {
 
       if (importRows.length === 0) throw new Error("No valid contacts found");
 
-      const { data: inserted, error } = await supabase.from("contacts").insert(importRows).select("id");
-      if (error) throw error;
-      return (inserted || []).map((c: any) => c.id as string);
+      const importedIds = await api.contacts.bulkCreate(
+        importRows.map(r => ({ ...r, user_id: user.id }))
+      );
+      return importedIds;
     },
     onSuccess: (newIds: string[]) => {
       queryClient.invalidateQueries({ queryKey: ["wizard-contacts"] });
@@ -450,28 +426,22 @@ const CampaignWizard = () => {
       }
 
       const starter = getStarterTemplate(presetId);
-      const { data, error } = await supabase
-        .from("email_templates")
-        .insert({
-          user_id: user.id,
-          name: starter.name,
-          subject: starter.subject,
-          body: starter.body,
-          type: starter.type,
-          category: "general",
-          template_format: "visual",
-          html_body: starter.html_body,
-          design_config: {
-            ...(starter.design_config as VisualTemplateConfig),
-            sectionOrder: DEFAULT_VISUAL_SECTION_ORDER,
-          },
-        })
-        .select()
-        .single();
+      const created = await api.templates.create({
+        name: starter.name,
+        subject: starter.subject,
+        body: starter.body,
+        type: starter.type,
+        category: "general",
+        template_format: "visual",
+        html_body: starter.html_body,
+        design_config: {
+          ...(starter.design_config as VisualTemplateConfig),
+          sectionOrder: DEFAULT_VISUAL_SECTION_ORDER,
+        },
+      });
 
-      if (error) throw error;
       await queryClient.invalidateQueries({ queryKey: ["wizard-templates", user.id] });
-      pickTemplate(data as EmailRow);
+      pickTemplate(created as EmailRow);
     } catch (e: unknown) {
       toast.error(e instanceof Error ? e.message : "Could not load template");
     } finally {
@@ -504,13 +474,10 @@ const CampaignWizard = () => {
       const name = resolveCampaignName();
 
       if (smtp?.id && (senderName || senderEmail)) {
-        await supabase
-          .from("smtp_settings")
-          .update({
-            from_name: senderName || smtp.from_name,
-            from_email: senderEmail || smtp.from_email,
-          })
-          .eq("id", smtp.id);
+        await api.settings.smtp.save({
+          from_name: senderName || smtp.from_name,
+          from_email: senderEmail || smtp.from_email,
+        });
       }
       if (!subject) throw new Error("Subject required");
       if (!hasUsableSmtpConfig(smtp)) throw new Error(getSmtpConfigError());
@@ -524,65 +491,45 @@ const CampaignWizard = () => {
         if (scheduledAt.getTime() < Date.now()) throw new Error("Schedule must be in the future");
       }
 
-      // Persist edited template (always visual in campaign wizard)
+      // Persist edited template
       const visualConfig = designConfig || toVisualConfig(selectedTemplate);
       const visualContent = buildVisualTemplateContent(visualConfig);
 
-      // Inject preheader into HTML if set
       let finalHtml = visualContent.htmlBody;
       if (previewText.trim()) {
         const preheaderDiv = `<div style="display:none;font-size:1px;color:#ffffff;line-height:1px;max-height:0px;max-width:0px;opacity:0;overflow:hidden">${previewText.trim()}</div>`;
         finalHtml = preheaderDiv + finalHtml;
       }
 
-      await supabase
-        .from("email_templates")
-        .update({
-          subject,
-          body: visualContent.body,
-          html_body: finalHtml,
-          blocks: null,
-          design_config: visualConfig as any,
-          template_format: "visual",
-        })
-        .eq("id", selectedTemplate.id);
+      await api.templates.update(selectedTemplate.id, {
+        subject,
+        body: visualContent.body,
+        html_body: finalHtml,
+        blocks: null,
+        design_config: visualConfig,
+        template_format: "visual",
+      });
 
       // Create campaign
-      const { data: campaign, error: cErr } = await supabase
-        .from("campaigns")
-        .insert({
-          user_id: user.id,
-          name,
-          status: sendMode === "now" ? "Running" : "Scheduled",
-        })
-        .select()
-        .single();
-      if (cErr) {
-        const conflict = parseCampaignNameConflict(cErr);
-        if (conflict) throw new Error(conflict);
-        throw cErr;
-      }
+      const campaign = await api.campaigns.create({
+        name,
+        status: sendMode === "now" ? "Running" : "Scheduled",
+      });
 
       // Single step pointing to template
-      const { error: sErr } = await supabase.from("campaign_steps").insert({
-        campaign_id: campaign.id,
+      await api.campaigns.steps.create(campaign.id, {
         step_number: 1,
         delay_value: 0,
         delay_unit: "days",
         delay_days: 0,
         template_id: selectedTemplate.id,
       });
-      if (sErr) throw sErr;
 
       // Tag recipient contacts to this campaign
-      await supabase
-        .from("contacts")
-        .update({ campaign_id: campaign.id })
-        .in("id", recipientIds);
+      await api.contacts.bulkUpdate(recipientIds, { campaign_id: campaign.id });
 
       // Queue rows
       const queueRows = recipientIds.map((cid) => ({
-        user_id: user.id,
         campaign_id: campaign.id,
         contact_id: cid,
         step_number: 1,
@@ -592,8 +539,7 @@ const CampaignWizard = () => {
       // Insert in chunks
       for (let i = 0; i < queueRows.length; i += 500) {
         const chunk = queueRows.slice(i, i + 500);
-        const { error: qErr } = await supabase.from("email_queue").insert(chunk);
-        if (qErr) throw qErr;
+        await api.queue.bulkCreate(chunk);
       }
 
       let continuedInBackground = false;
@@ -1256,13 +1202,10 @@ const Step3Subject = ({
 }) => {
   const aiSubject = useMutation({
     mutationFn: async () => {
-      const { data, error } = await supabase.functions.invoke("ai-email-writer", {
-        body: {
-          prompt: `Suggest a short, catchy email subject line for: ${subject || "marketing email"}`,
-          type: "subject",
-        },
+      const data = await api.ai.writeEmail({
+        prompt: `Suggest a short, catchy email subject line for: ${subject || "marketing email"}`,
+        type: "subject",
       });
-      if (error) throw error;
       if (data && typeof data === "object" && "success" in data && data.success === false) {
         throw new Error(typeof data.error === "string" ? data.error : "AI suggestion failed");
       }

@@ -1,6 +1,5 @@
 import { useRef, useState } from "react";
 import { Upload, Loader2 } from "lucide-react";
-import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -27,19 +26,23 @@ const ImageUploader = ({ value, onChange }: Props) => {
     }
     setUploading(true);
     try {
-      const ext = file.name.split(".").pop() || "png";
-      const path = `${user.id}/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
-      const { error } = await supabase.storage
-        .from("template-images")
-        .upload(path, file, { cacheControl: "3600", upsert: false });
-      if (error) throw error;
-      const { data } = supabase.storage.from("template-images").getPublicUrl(path);
-      onChange(data.publicUrl);
-      toast.success("Image uploaded");
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const result = e.target?.result as string;
+        if (result) {
+          onChange(result);
+          toast.success("Image uploaded");
+        }
+        setUploading(false);
+      };
+      reader.onerror = () => {
+        toast.error("Failed to read image file");
+        setUploading(false);
+      };
+      reader.readAsDataURL(file);
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Upload failed";
       toast.error(msg);
-    } finally {
       setUploading(false);
     }
   };

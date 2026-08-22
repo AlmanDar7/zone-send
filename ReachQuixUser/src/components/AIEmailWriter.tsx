@@ -5,7 +5,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { supabase } from "@/integrations/supabase/client";
+import { api } from "@/lib/api";
 import { toast } from "sonner";
 
 interface AIEmailWriterProps {
@@ -27,10 +27,7 @@ const AIEmailWriter = ({ onInsert, onInsertSubject }: AIEmailWriterProps) => {
     setLoading(true);
     setResult("");
     try {
-      const { data, error } = await supabase.functions.invoke("ai-email-writer", {
-        body: { prompt, type, tone },
-      });
-      if (error) throw error;
+      const data = await api.ai.writeEmail({ prompt, type, tone });
       if (!data.success) throw new Error(data.error);
       setResult(data.content);
     } catch (err: unknown) {

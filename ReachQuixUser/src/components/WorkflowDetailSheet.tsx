@@ -6,10 +6,34 @@ import {
   SheetContent,
 } from "@/components/ui/sheet";
 import { cn } from "@/lib/utils";
-import type { Database } from "@/integrations/supabase/types";
 
-type Campaign = Database["public"]["Tables"]["campaigns"]["Row"];
-type CampaignStep = Database["public"]["Tables"]["campaign_steps"]["Row"];
+type Campaign = {
+  id: string;
+  name: string;
+  status: string;
+  daily_limit?: number;
+  created_at: string;
+  updated_at: string;
+  user_id: string;
+};
+
+type CampaignStep = {
+  id: string;
+  campaign_id: string;
+  step_number: number;
+  template_id?: string | null;
+  delay_value?: number | null;
+  delay_unit?: string | null;
+  delay_days?: number | null;
+  subject_a?: string | null;
+  body_a?: string | null;
+  subject_b?: string | null;
+  body_b?: string | null;
+  ab_test_enabled?: boolean | null;
+  winning_variant?: string | null;
+  created_at?: string;
+};
+
 type TimingDraft = { value: string; unit: "days" | "hours" };
 type TemplateOption = { id: string; name: string; type: string; category: string };
 

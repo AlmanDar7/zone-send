@@ -11,7 +11,7 @@ import {
 import { ChevronDown, LogOut, Menu, Settings, UserCircle2, X } from "lucide-react";
 import AppLogo from "@/components/AppLogo";
 import { cn } from "@/lib/utils";
-import { supabase } from "@/integrations/supabase/client";
+import { api } from "@/lib/api";
 import { useQuery } from "@tanstack/react-query";
 
 const navItems = [
@@ -31,14 +31,7 @@ const AppTopNav = () => {
 
   const { data: profile } = useQuery({
     queryKey: ["profile-nav", user?.id],
-    queryFn: async () => {
-      const { data } = await supabase
-        .from("profiles")
-        .select("full_name")
-        .eq("user_id", user!.id)
-        .maybeSingle();
-      return data;
-    },
+    queryFn: () => api.profile.get(),
     enabled: !!user,
   });
 

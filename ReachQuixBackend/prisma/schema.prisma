@@ -1,0 +1,246 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+model BrandTheme {
+  id               String   @id @default(uuid())
+  background_color String
+  body_font        String
+  brand_name       String
+  button_style     Json
+  created_at       DateTime @default(now())
+  footer_style     Json
+  heading_font     String
+  name             String
+  primary_color    String
+  updated_at       DateTime @updatedAt
+  user_id          String
+
+  @@map("brand_themes")
+}
+
+model Campaign {
+  id            String         @id @default(uuid())
+  created_at    DateTime       @default(now())
+  daily_limit   Int            @default(0)
+  name          String
+  status        String         @default("draft")
+  updated_at    DateTime       @updatedAt
+  user_id       String
+  campaignSteps CampaignStep[]
+  EmailQueue    EmailQueue[]
+  EmailEvent    EmailEvent[]
+
+  @@map("campaigns")
+}
+
+model CampaignStep {
+  id              String         @id @default(uuid())
+  ab_test_enabled Boolean?
+  body_a          String?
+  body_b          String?
+  campaign_id     String
+  created_at      DateTime       @default(now())
+  delay_days      Int            @default(0)
+  delay_unit      String
+  delay_value     Int            @default(0)
+  step_number     Int
+  subject_a       String?
+  subject_b       String?
+  template_id     String?
+  winning_variant String?
+  campaign        Campaign       @relation(fields: [campaign_id], references: [id])
+  template        EmailTemplate? @relation(fields: [template_id], references: [id])
+
+  @@map("campaign_steps")
+}
+
+model Contact {
+  id             String                @id @default(uuid())
+  created_at     DateTime              @default(now())
+  email          String
+  name           String?
+  first_name     String?
+  last_name      String?
+  company_name   String?
+  phone          String?
+  status         String                @default("active")
+  campaign_id    String?
+  updated_at     DateTime              @updatedAt
+  user_id        String
+  folder_members ContactFolderMember[]
+  tags           ContactTag[]
+  EmailQueue     EmailQueue[]
+  EmailEvent     EmailEvent[]
+
+  @@map("contacts")
+}
+
+model ContactFolder {
+  id         String                @id @default(uuid())
+  created_at DateTime              @default(now())
+  name       String
+  updated_at DateTime              @updatedAt
+  user_id    String
+  members    ContactFolderMember[]
+
+  @@map("contact_folders")
+}
+
+model ContactFolderMember {
+  id         String        @id @default(uuid())
+  contact_id String
+  folder_id  String
+  created_at DateTime      @default(now())
+  contact    Contact       @relation(fields: [contact_id], references: [id])
+  folder     ContactFolder @relation(fields: [folder_id], references: [id])
+
+  @@map("contact_folder_members")
+}
+
+model Tag {
+  id         String       @id @default(uuid())
+  name       String
+  created_at DateTime     @default(now())
+  user_id    String
+  contacts   ContactTag[]
+
+  @@map("tags")
+}
+
+model ContactTag {
+  contact_id String
+  tag_id     String
+  created_at DateTime @default(now())
+  contact    Contact  @relation(fields: [contact_id], references: [id])
+  tag        Tag      @relation(fields: [tag_id], references: [id])
+
+  @@id([contact_id, tag_id])
+  @@map("contact_tags")
+}
+
+model EmailTemplate {
+  id              String         @id @default(uuid())
+  blocks          Json?
+  body            String         @db.Text
+  category        String         @default("email")
+  created_at      DateTime       @default(now())
+  design_config   Json?
+  html_body       String?        @db.Text
+  name            String
+  subject         String
+  tags            Json? // Using Json since array strings aren't native in MySQL
+  template_format String         @default("visual")
+  thumbnail_url   String?
+  type            String         @default("Initial")
+  updated_at      DateTime       @updatedAt
+  user_id         String
+  campaign_steps  CampaignStep[]
+
+  @@map("email_templates")
+}
+
+model SmtpSettings {
+  id         String   @id @default(uuid())
+  created_at DateTime @default(now())
+  from_email String?
+  from_name  String?
+  host       String
+  password   String
+  port       Int
+  updated_at DateTime @updatedAt
+  use_ssl    Boolean  @default(true)
+  user_id    String   @unique
+  username   String
+
+  @@map("smtp_settings")
+}
+
+model Profile {
+  id         String   @id
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+  user_id    String   @unique
+  avatar_url String?
+  full_name  String?
+
+  @@map("profiles")
+}
+
+model SendingLimit {
+  id              String   @id @default(uuid())
+  created_at      DateTime @default(now())
+  updated_at      DateTime @updatedAt
+  user_id         String   @unique
+  last_reset_date String
+  max_per_day     Int
+  sent_today      Int      @default(0)
+
+  @@map("sending_limits")
+}
+
+model GoogleSheetSettings {
+  id               String   @id @default(uuid())
+  created_at       DateTime @default(now())
+  updated_at       DateTime @updatedAt
+  user_id          String   @unique
+  credentials_json String   @db.Text
+  sheet_url        String?
+
+  @@map("google_sheet_settings")
+}
+
+model EmailQueue {
+  id            String       @id @default(uuid())
+  campaign_id   String
+  click_count   Int          @default(0)
+  contact_id    String
+  created_at    DateTime     @default(now())
+  error_message String?      @db.Text
+  open_count    Int          @default(0)
+  scheduled_at  DateTime
+  sent_at       DateTime?
+  status        String
+  step_number   Int          @default(1)
+  user_id       String
+  variant       String?
+  campaign      Campaign     @relation(fields: [campaign_id], references: [id])
+  contact       Contact      @relation(fields: [contact_id], references: [id])
+  events        EmailEvent[]
+
+  @@map("email_queue")
+}
+
+model EmailEvent {
+  id             String      @id @default(uuid())
+  campaign_id    String?
+  contact_id     String?
+  created_at     DateTime    @default(now())
+  email_queue_id String?
+  event_type     String
+  ip_address     String?
+  link_url       String?     @db.Text
+  user_agent     String?
+  user_id        String
+  campaign       Campaign?   @relation(fields: [campaign_id], references: [id])
+  contact        Contact?    @relation(fields: [contact_id], references: [id])
+  queue          EmailQueue? @relation(fields: [email_queue_id], references: [id])
+
+  @@map("email_events")
+}
+
+model TemplateSection {
+  id         String   @id @default(uuid())
+  category   String   @default("custom")
+  created_at DateTime @default(now())
+  name       String
+  blocks     Json
+  user_id    String
+
+  @@map("template_sections")
+}

@@ -13,8 +13,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { motion, AnimatePresence } from "framer-motion";
 import { useAuth } from "@/contexts/AuthContext";
-import { supabase } from "@/integrations/supabase/client";
-import type { Database } from "@/integrations/supabase/types";
+import { api } from "@/lib/api";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { startQueueProcessor } from "@/lib/queueProcessor";
@@ -35,7 +34,7 @@ const statusColors: Record<string, string> = {
   Scheduled: "bg-info/10 text-info border border-info/20",
 };
 
-type CampaignStep = Database["public"]["Tables"]["campaign_steps"]["Row"];
+type CampaignStep = any;
 type TimingDraft = { value: string; unit: "days" | "hours" };
 
 const getStepTiming = (step: CampaignStep): { value: number; unit: "days" | "hours" } => ({
@@ -81,12 +80,7 @@ const Campaigns = ({ variant = "campaigns" }: CampaignsProps) => {
   const { data: campaigns = [], isLoading } = useQuery({
     queryKey: ["campaigns", user?.id],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("campaigns")
-        .select("*")
-        .eq("user_id", user!.id)
-        .order("created_at", { ascending: false });
-      if (error) throw error;
+      const data = await api.campaigns.list();
       return data;
     },
     enabled: !!user,
@@ -95,11 +89,7 @@ const Campaigns = ({ variant = "campaigns" }: CampaignsProps) => {
   const { data: templates = [] } = useQuery({
     queryKey: ["templates-list", user?.id],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("email_templates")
-        .select("id, name, type, category")
-        .eq("user_id", user!.id);
-      if (error) throw error;
+      const data = await api.templates.list('email');
       return data;
     },
     enabled: !!user,
@@ -108,11 +98,7 @@ const Campaigns = ({ variant = "campaigns" }: CampaignsProps) => {
   const { data: allSteps = [] } = useQuery({
     queryKey: ["campaign-steps", user?.id],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("campaign_steps")
-        .select("*")
-        .order("step_number", { ascending: true });
-      if (error) throw error;
+      const data = await api.campaigns.steps.listAll();
       return data;
     },
     enabled: !!user,
@@ -121,8 +107,7 @@ const Campaigns = ({ variant = "campaigns" }: CampaignsProps) => {
   const { data: smtpSettings } = useQuery({
     queryKey: ["campaigns-smtp", user?.id],
     queryFn: async () => {
-      const { data, error } = await supabase.from("smtp_settings").select("*").maybeSingle();
-      if (error) throw error;
+      const data = await api.settings.smtp.get();
       return data;
     },
     enabled: !!user,
@@ -142,25 +127,17 @@ const Campaigns = ({ variant = "campaigns" }: CampaignsProps) => {
         throw new Error(campaignNameDuplicateMessage(name));
       }
 
-      const { data, error } = await supabase
-        .from("campaigns")
-        .insert({ user_id: user!.id, name, daily_limit: parseInt(dailyLimit) || 500 })
-        .select()
-        .single();
-      if (error) {
-        const conflict = parseCampaignNameConflict(error);
-        if (conflict) throw new Error(conflict);
-        throw error;
-      }
-
-      const defaultSteps = [
-        { campaign_id: data.id, step_number: 1, delay_days: 0, delay_value: 0, delay_unit: "days" },
-        { campaign_id: data.id, step_number: 2, delay_days: 2, delay_value: 2, delay_unit: "days" },
-        { campaign_id: data.id, step_number: 3, delay_days: 4, delay_value: 4, delay_unit: "days" },
-        { campaign_id: data.id, step_number: 4, delay_days: 7, delay_value: 7, delay_unit: "days" },
-        { campaign_id: data.id, step_number: 5, delay_days: 14, delay_value: 14, delay_unit: "days" },
-      ];
-      await supabase.from("campaign_steps").insert(defaultSteps);
+      const data = await api.campaigns.create({
+        name,
+        daily_limit: parseInt(dailyLimit) || 500,
+        steps: [
+          { step_number: 1, delay_days: 0, delay_value: 0, delay_unit: "days" },
+          { step_number: 2, delay_days: 2, delay_value: 2, delay_unit: "days" },
+          { step_number: 3, delay_days: 4, delay_value: 4, delay_unit: "days" },
+          { step_number: 4, delay_days: 7, delay_value: 7, delay_unit: "days" },
+          { step_number: 5, delay_days: 14, delay_value: 14, delay_unit: "days" },
+        ]
+      });
       return data;
     },
     onSuccess: (data) => {
@@ -182,11 +159,7 @@ const Campaigns = ({ variant = "campaigns" }: CampaignsProps) => {
 
   const assignTemplate = useMutation({
     mutationFn: async ({ stepId, templateId }: { stepId: string; templateId: string | null }) => {
-      const { error } = await supabase
-        .from("campaign_steps")
-        .update({ template_id: templateId })
-        .eq("id", stepId);
-      if (error) throw error;
+      await api.campaigns.steps.update(stepId, templateId || '', { template_id: templateId });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["campaign-steps"] });
@@ -197,15 +170,11 @@ const Campaigns = ({ variant = "campaigns" }: CampaignsProps) => {
 
   const updateStepTiming = useMutation({
     mutationFn: async ({ stepId, delayValue, delayUnit }: { stepId: string; delayValue: number; delayUnit: "days" | "hours" }) => {
-      const { error } = await supabase
-        .from("campaign_steps")
-        .update({
-          delay_value: delayValue,
-          delay_unit: delayUnit,
-          delay_days: delayUnit === "days" ? delayValue : 0,
-        })
-        .eq("id", stepId);
-      if (error) throw error;
+      await api.campaigns.steps.update(stepId, '', {
+        delay_value: delayValue,
+        delay_unit: delayUnit,
+        delay_days: delayUnit === "days" ? delayValue : 0,
+      });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["campaign-steps"] });
@@ -220,8 +189,7 @@ const Campaigns = ({ variant = "campaigns" }: CampaignsProps) => {
         throw new Error(getSmtpConfigError());
       }
 
-      const { error } = await supabase.from("campaigns").update({ status }).eq("id", id);
-      if (error) throw error;
+      await api.campaigns.update(id, { status });
 
       if (status === "Running") {
         return startQueueProcessor(id);
@@ -248,8 +216,7 @@ const Campaigns = ({ variant = "campaigns" }: CampaignsProps) => {
 
   const deleteCampaign = useMutation({
     mutationFn: async (id: string) => {
-      const { error } = await supabase.from("campaigns").delete().eq("id", id);
-      if (error) throw error;
+      await api.campaigns.delete(id);
     },
     onSuccess: (_data, id) => {
       queryClient.invalidateQueries({ queryKey: ["campaigns"] });
@@ -260,8 +227,9 @@ const Campaigns = ({ variant = "campaigns" }: CampaignsProps) => {
 
   const removeDuplicateWorkflows = useMutation({
     mutationFn: async (ids: string[]) => {
-      const { error } = await supabase.from("campaigns").delete().in("id", ids);
-      if (error) throw error;
+      for (const id of ids) {
+        await api.campaigns.delete(id);
+      }
     },
     onSuccess: (_data, ids) => {
       queryClient.invalidateQueries({ queryKey: ["campaigns"] });

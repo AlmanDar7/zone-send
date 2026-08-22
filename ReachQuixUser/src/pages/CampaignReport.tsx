@@ -1,5 +1,5 @@
 import { useAuth } from "@/contexts/AuthContext";
-import { supabase } from "@/integrations/supabase/client";
+import { api } from "@/lib/api";
 import { useQuery } from "@tanstack/react-query";
 import { useParams, useNavigate } from "react-router-dom";
 import { ArrowLeft, Download, Eye, MousePointerClick, MessageSquare, AlertTriangle, FlaskConical } from "lucide-react";
@@ -12,51 +12,17 @@ const CampaignReport = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
 
-  const { data: campaign } = useQuery({
+  const { data: reportData } = useQuery({
     queryKey: ["campaign-report", id],
-    queryFn: async () => {
-      const { data, error } = await supabase.from("campaigns").select("*").eq("id", id!).single();
-      if (error) throw error;
-      return data;
-    },
+    queryFn: () => api.campaigns.report(id!),
     enabled: !!user && !!id,
   });
 
-  const { data: steps = [] } = useQuery({
-    queryKey: ["campaign-report-steps", id],
-    queryFn: async () => {
-      const { data } = await supabase.from("campaign_steps").select("*, email_templates(name)").eq("campaign_id", id!).order("step_number");
-      return data || [];
-    },
-    enabled: !!user && !!id,
-  });
-
-  const { data: queueStats = [] } = useQuery({
-    queryKey: ["campaign-report-queue", id],
-    queryFn: async () => {
-      const { data } = await supabase.from("email_queue").select("step_number, status, variant, open_count, click_count").eq("campaign_id", id!);
-      return data || [];
-    },
-    enabled: !!user && !!id,
-  });
-
-  const { data: events = [] } = useQuery({
-    queryKey: ["campaign-report-events", id],
-    queryFn: async () => {
-      const { data } = await supabase.from("email_events").select("event_type, email_queue_id").eq("campaign_id", id!);
-      return data || [];
-    },
-    enabled: !!user && !!id,
-  });
-
-  const { data: contacts = [] } = useQuery({
-    queryKey: ["campaign-report-contacts", id],
-    queryFn: async () => {
-      const { data } = await supabase.from("contacts").select("id, name, email, status, lead_score").eq("campaign_id", id!).order("lead_score", { ascending: false });
-      return data || [];
-    },
-    enabled: !!user && !!id,
-  });
+  const campaign = reportData?.campaign;
+  const steps = reportData?.steps || [];
+  const queueStats = reportData?.queueStats || [];
+  const events = reportData?.events || [];
+  const contacts = reportData?.contacts || [];
 
   // Per-step stats
   const stepStats = steps.map((step: any) => {
