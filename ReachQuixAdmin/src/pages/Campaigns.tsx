@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { supabase } from "@/integrations/supabase/client";
+import { api } from "@/lib/api";
 import {
   Table,
   TableBody,
@@ -16,23 +16,20 @@ import { Loader2 } from "lucide-react";
 export const Campaigns = () => {
   const { data: campaigns, isLoading } = useQuery({
     queryKey: ["admin-campaigns"],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("campaigns")
-        .select(`*`)
-        .order("created_at", { ascending: false });
-
-      if (error) throw error;
-      return data;
-    }
+    queryFn: () => api.admin.campaigns(),
   });
 
   const getStatusColor = (status: string) => {
     switch (status.toLowerCase()) {
-      case "active": return "bg-green-500/10 text-green-500 hover:bg-green-500/20";
-      case "paused": return "bg-amber-500/10 text-amber-500 hover:bg-amber-500/20";
-      case "completed": return "bg-blue-500/10 text-blue-500 hover:bg-blue-500/20";
-      default: return "bg-muted text-muted-foreground";
+      case "running":
+      case "active":
+        return "bg-emerald-500/10 text-emerald-500 hover:bg-emerald-500/20";
+      case "paused":
+        return "bg-amber-500/10 text-amber-500 hover:bg-amber-500/20";
+      case "completed":
+        return "bg-blue-500/10 text-blue-500 hover:bg-blue-500/20";
+      default:
+        return "bg-muted text-muted-foreground";
     }
   };
 
@@ -40,7 +37,7 @@ export const Campaigns = () => {
     <div className="p-8 space-y-8">
       <div>
         <h1 className="font-display text-3xl font-bold">Campaigns</h1>
-        <p className="text-muted-foreground mt-1">Global view of all user campaigns.</p>
+        <p className="text-muted-foreground mt-1">Global view of all user campaigns across the platform.</p>
       </div>
 
       <Card className="overflow-hidden">
@@ -54,19 +51,20 @@ export const Campaigns = () => {
               <TableHeader>
                 <TableRow>
                   <TableHead>Campaign Name</TableHead>
-                  <TableHead>Owner</TableHead>
+                  <TableHead>Owner User ID</TableHead>
                   <TableHead>Status</TableHead>
+                  <TableHead>Steps</TableHead>
+                  <TableHead>Emails Queued / Sent</TableHead>
                   <TableHead>Created</TableHead>
-                  <TableHead>Daily Limit</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {campaigns?.map((campaign) => (
+                {campaigns?.map((campaign: any) => (
                   <TableRow key={campaign.id}>
                     <TableCell className="font-medium">
                       {campaign.name}
                     </TableCell>
-                    <TableCell className="text-muted-foreground truncate max-w-[150px]" title={campaign.user_id}>
+                    <TableCell className="text-muted-foreground font-mono text-xs truncate max-w-[150px]" title={campaign.user_id}>
                       {campaign.user_id}
                     </TableCell>
                     <TableCell>
@@ -74,17 +72,22 @@ export const Campaigns = () => {
                         {campaign.status}
                       </Badge>
                     </TableCell>
-                    <TableCell className="text-muted-foreground">
-                      {format(new Date(campaign.created_at), "MMM d, yyyy")}
-                    </TableCell>
                     <TableCell>
-                      {campaign.daily_limit}
+                      <span className="text-xs font-mono bg-muted px-2 py-1 rounded">
+                        {campaign.stepCount || 1}
+                      </span>
+                    </TableCell>
+                    <TableCell className="text-sm">
+                      {campaign.sentTotal || 0} / {campaign.queueTotal || 0}
+                    </TableCell>
+                    <TableCell className="text-muted-foreground text-sm">
+                      {campaign.created_at ? format(new Date(campaign.created_at), "MMM d, yyyy") : "—"}
                     </TableCell>
                   </TableRow>
                 ))}
                 {campaigns?.length === 0 && (
                   <TableRow>
-                    <TableCell colSpan={5} className="h-24 text-center text-muted-foreground">
+                    <TableCell colSpan={6} className="h-24 text-center text-muted-foreground">
                       No campaigns found.
                     </TableCell>
                   </TableRow>

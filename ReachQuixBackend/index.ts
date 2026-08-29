@@ -10,6 +10,7 @@ import profileRouter from './src/routes/profile';
 import analyticsRouter from './src/routes/analytics';
 import queueRouter from './src/routes/queue';
 import aiRouter from './src/routes/ai';
+import adminRouter from './src/routes/admin';
 
 dotenv.config();
 
@@ -33,6 +34,7 @@ app.use('/api/profile', profileRouter);
 app.use('/api/analytics', analyticsRouter);
 app.use('/api/queue', queueRouter);
 app.use('/api/ai', aiRouter);
+app.use('/api/admin', adminRouter);
 
 const PORT = process.env.PORT || 5000;
 

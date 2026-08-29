@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { supabase } from "@/integrations/supabase/client";
+import { api } from "@/lib/api";
 import {
   Table,
   TableBody,
@@ -16,21 +16,7 @@ import { Loader2 } from "lucide-react";
 export const Users = () => {
   const { data: users, isLoading } = useQuery({
     queryKey: ["admin-users"],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("profiles")
-        .select(`
-          *,
-          sending_limits (
-            sent_today,
-            max_per_day
-          )
-        `)
-        .order("created_at", { ascending: false });
-
-      if (error) throw error;
-      return data;
-    }
+    queryFn: () => api.admin.users(),
   });
 
   return (
@@ -52,16 +38,13 @@ export const Users = () => {
                 <TableRow>
                   <TableHead>User</TableHead>
                   <TableHead>Joined</TableHead>
-                  <TableHead>Sending Limit</TableHead>
+                  <TableHead>Campaigns</TableHead>
+                  <TableHead>Contacts</TableHead>
                   <TableHead>User ID</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {users?.map((user) => {
-                  const limits = Array.isArray(user.sending_limits) 
-                    ? user.sending_limits[0] 
-                    : user.sending_limits;
-                  
+                {users?.map((user: any) => {
                   return (
                     <TableRow key={user.id}>
                       <TableCell>
@@ -70,22 +53,17 @@ export const Users = () => {
                             <AvatarImage src={user.avatar_url || ""} />
                             <AvatarFallback>{user.full_name?.charAt(0) || "U"}</AvatarFallback>
                           </Avatar>
-                          <span className="font-medium">{user.full_name || "Unknown"}</span>
+                          <span className="font-medium">{user.full_name || "Anonymous User"}</span>
                         </div>
                       </TableCell>
                       <TableCell className="text-muted-foreground">
-                        {format(new Date(user.created_at), "MMM d, yyyy")}
+                        {user.created_at ? format(new Date(user.created_at), "MMM d, yyyy") : "—"}
                       </TableCell>
                       <TableCell>
-                        {limits ? (
-                          <div className="flex items-center gap-2">
-                            <span className="text-sm font-medium">
-                              {limits.sent_today} / {limits.max_per_day}
-                            </span>
-                          </div>
-                        ) : (
-                          <span className="text-muted-foreground text-sm">No limit record</span>
-                        )}
+                        <span className="text-sm font-semibold">{user.campaignCount || 0}</span>
+                      </TableCell>
+                      <TableCell>
+                        <span className="text-sm font-semibold">{user.contactCount || 0}</span>
                       </TableCell>
                       <TableCell>
                         <span className="text-xs font-mono text-muted-foreground bg-muted px-2 py-1 rounded">
