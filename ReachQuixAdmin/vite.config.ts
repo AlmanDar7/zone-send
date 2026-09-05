@@ -13,4 +13,21 @@ export default defineConfig({
       "@": path.resolve(__dirname, "./src"),
     },
   },
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          "vendor-react": ["react", "react-dom", "react-router-dom"],
+          "vendor-radix": [
+            "@radix-ui/react-dialog",
+            "@radix-ui/react-tabs",
+            "@radix-ui/react-select",
+          ],
+          "vendor-query": ["@tanstack/react-query"],
+          "vendor-firebase": ["firebase/app", "firebase/auth"],
+        },
+      },
+    },
+    chunkSizeWarningLimit: 400,
+  },
 })

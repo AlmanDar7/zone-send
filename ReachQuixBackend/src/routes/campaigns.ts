@@ -41,30 +41,31 @@ router.get('/steps', async (req: AuthRequest, res) => {
 
 // GET /api/campaigns/:id/report - full campaign report data
 router.get('/:id/report', async (req: AuthRequest, res) => {
+  const id = String(req.params.id);
   try {
-    const campaign = await prisma.campaign.findUnique({ where: { id: req.params.id } });
+    const campaign = await prisma.campaign.findUnique({ where: { id } });
     if (!campaign || campaign.user_id !== req.user!.uid) {
       return res.status(404).json({ error: 'Campaign not found' });
     }
 
     const steps = await prisma.campaignStep.findMany({
-      where: { campaign_id: req.params.id },
+      where: { campaign_id: id },
       include: { template: { select: { name: true } } },
       orderBy: { step_number: 'asc' }
     });
 
     const queueStats = await prisma.emailQueue.findMany({
-      where: { campaign_id: req.params.id },
+      where: { campaign_id: id },
       select: { step_number: true, status: true, variant: true, open_count: true, click_count: true }
     });
 
     const events = await prisma.emailEvent.findMany({
-      where: { campaign_id: req.params.id },
+      where: { campaign_id: id },
       select: { event_type: true, email_queue_id: true }
     });
 
     const contacts = await prisma.contact.findMany({
-      where: { campaign_id: req.params.id },
+      where: { campaign_id: id },
       select: { id: true, name: true, email: true, status: true },
       orderBy: { updated_at: 'desc' }
     });
@@ -90,9 +91,10 @@ router.get('/:id/report', async (req: AuthRequest, res) => {
 
 // GET /api/campaigns/:id
 router.get('/:id', async (req: AuthRequest, res) => {
+  const id = String(req.params.id);
   try {
     const campaign = await prisma.campaign.findUnique({
-      where: { id: req.params.id },
+      where: { id },
       include: {
         campaignSteps: {
           include: { template: true },
@@ -112,29 +114,46 @@ router.get('/:id', async (req: AuthRequest, res) => {
 
 // POST /api/campaigns
 router.post('/', async (req: AuthRequest, res) => {
-  const { name, daily_limit, status, steps } = req.body;
+  const { name, steps, daily_limit } = req.body;
   try {
     const campaign = await prisma.campaign.create({
       data: {
         name,
         daily_limit: daily_limit || 0,
-        status: status || 'draft',
+        status: 'draft',
         user_id: req.user!.uid,
-        campaignSteps: {
-          create: (steps || []).map((step: any, index: number) => ({
-            step_number: index + 1,
+      },
+    });
+
+    // If steps were provided, create them
+    if (steps && Array.isArray(steps)) {
+      for (const step of steps) {
+        await prisma.campaignStep.create({
+          data: {
+            campaign_id: campaign.id,
+            step_number: step.step_number,
             delay_days: step.delay_days || 0,
             delay_unit: step.delay_unit || 'days',
             delay_value: step.delay_value || 0,
             template_id: step.template_id || null,
-          }))
-        }
-      },
-      include: {
-        campaignSteps: true
+            subject_a: step.subject_a || null,
+            subject_b: step.subject_b || null,
+            preview_text_a: step.preview_text_a || step.preview_text || null,
+            preview_text_b: step.preview_text_b || null,
+            body_a: step.body_a || null,
+            body_b: step.body_b || null,
+            ab_test_enabled: step.ab_test_enabled || false,
+          },
+        });
       }
+    }
+
+    const completeCampaign = await prisma.campaign.findUnique({
+      where: { id: campaign.id },
+      include: { campaignSteps: true }
     });
-    res.json(campaign);
+
+    res.json(completeCampaign);
   } catch (error) {
     console.error(error);
     res.status(500).json({ error: 'Failed to create campaign' });
@@ -143,15 +162,16 @@ router.post('/', async (req: AuthRequest, res) => {
 
 // DELETE /api/campaigns/:id
 router.delete('/:id', async (req: AuthRequest, res) => {
+  const id = String(req.params.id);
   try {
-    const existing = await prisma.campaign.findUnique({ where: { id: req.params.id } });
+    const existing = await prisma.campaign.findUnique({ where: { id } });
     if (!existing || existing.user_id !== req.user!.uid) {
       return res.status(404).json({ error: 'Campaign not found' });
     }
     
     // Delete steps first
-    await prisma.campaignStep.deleteMany({ where: { campaign_id: req.params.id } });
-    await prisma.campaign.delete({ where: { id: req.params.id } });
+    await prisma.campaignStep.deleteMany({ where: { campaign_id: id } });
+    await prisma.campaign.delete({ where: { id } });
     
     res.json({ success: true });
   } catch (error) {
@@ -162,13 +182,14 @@ router.delete('/:id', async (req: AuthRequest, res) => {
 
 // PUT /api/campaigns/:id
 router.put('/:id', async (req: AuthRequest, res) => {
+  const id = String(req.params.id);
   try {
-    const existing = await prisma.campaign.findUnique({ where: { id: req.params.id } });
+    const existing = await prisma.campaign.findUnique({ where: { id } });
     if (!existing || existing.user_id !== req.user!.uid) {
       return res.status(403).json({ error: 'Unauthorized' });
     }
     const updated = await prisma.campaign.update({
-      where: { id: req.params.id },
+      where: { id },
       data: req.body
     });
     res.json(updated);
@@ -179,13 +200,14 @@ router.put('/:id', async (req: AuthRequest, res) => {
 
 // POST /api/campaigns/:id/steps
 router.post('/:id/steps', async (req: AuthRequest, res) => {
+  const id = String(req.params.id);
   try {
-    const campaign = await prisma.campaign.findUnique({ where: { id: req.params.id } });
+    const campaign = await prisma.campaign.findUnique({ where: { id } });
     if (!campaign || campaign.user_id !== req.user!.uid) return res.status(403).json({ error: 'Unauthorized' });
     
     const step = await prisma.campaignStep.create({
       data: {
-        campaign_id: req.params.id,
+        campaign_id: id,
         step_number: req.body.step_number,
         delay_days: req.body.delay_days || 0,
         delay_unit: req.body.delay_unit || 'days',
@@ -193,6 +215,8 @@ router.post('/:id/steps', async (req: AuthRequest, res) => {
         template_id: req.body.template_id || null,
         subject_a: req.body.subject_a || null,
         subject_b: req.body.subject_b || null,
+        preview_text_a: req.body.preview_text_a || req.body.preview_text || null,
+        preview_text_b: req.body.preview_text_b || null,
         body_a: req.body.body_a || null,
         body_b: req.body.body_b || null,
         ab_test_enabled: req.body.ab_test_enabled || false,
@@ -204,14 +228,69 @@ router.post('/:id/steps', async (req: AuthRequest, res) => {
   }
 });
 
+// PUT /api/campaigns/:id/steps/sync - Replace all steps in campaign atomically
+router.put('/:id/steps/sync', async (req: AuthRequest, res) => {
+  const id = String(req.params.id);
+  const { steps } = req.body;
+
+  try {
+    const campaign = await prisma.campaign.findUnique({ where: { id } });
+    if (!campaign || campaign.user_id !== req.user!.uid) {
+      return res.status(403).json({ error: 'Unauthorized' });
+    }
+
+    if (!Array.isArray(steps)) {
+      return res.status(400).json({ error: 'Steps must be an array' });
+    }
+
+    await prisma.$transaction(async (tx) => {
+      await tx.campaignStep.deleteMany({ where: { campaign_id: id } });
+
+      for (let i = 0; i < steps.length; i++) {
+        const step = steps[i];
+        await tx.campaignStep.create({
+          data: {
+            campaign_id: id,
+            step_number: step.step_number || i + 1,
+            delay_days: step.delay_days || 0,
+            delay_unit: step.delay_unit || 'days',
+            delay_value: step.delay_value || 0,
+            template_id: step.template_id || null,
+            subject_a: step.subject_a || null,
+            subject_b: step.subject_b || null,
+            preview_text_a: step.preview_text_a || step.preview_text || null,
+            preview_text_b: step.preview_text_b || null,
+            body_a: step.body_a || null,
+            body_b: step.body_b || null,
+            ab_test_enabled: step.ab_test_enabled || false,
+          },
+        });
+      }
+    });
+
+    const updatedSteps = await prisma.campaignStep.findMany({
+      where: { campaign_id: id },
+      include: { template: true },
+      orderBy: { step_number: 'asc' },
+    });
+
+    res.json(updatedSteps);
+  } catch (error) {
+    console.error('Error syncing campaign steps:', error);
+    res.status(500).json({ error: 'Failed to sync campaign steps' });
+  }
+});
+
 // PUT /api/campaigns/:campaignId/steps/:stepId
 router.put('/:campaignId/steps/:stepId', async (req: AuthRequest, res) => {
+  const campaignId = String(req.params.campaignId);
+  const stepId = String(req.params.stepId);
   try {
-    const campaign = await prisma.campaign.findUnique({ where: { id: req.params.campaignId } });
+    const campaign = await prisma.campaign.findUnique({ where: { id: campaignId } });
     if (!campaign || campaign.user_id !== req.user!.uid) return res.status(403).json({ error: 'Unauthorized' });
     
     const updated = await prisma.campaignStep.update({
-      where: { id: req.params.stepId, campaign_id: req.params.campaignId },
+      where: { id: stepId, campaign_id: campaignId },
       data: req.body
     });
     res.json(updated);
@@ -222,12 +301,14 @@ router.put('/:campaignId/steps/:stepId', async (req: AuthRequest, res) => {
 
 // DELETE /api/campaigns/:campaignId/steps/:stepId
 router.delete('/:campaignId/steps/:stepId', async (req: AuthRequest, res) => {
+  const campaignId = String(req.params.campaignId);
+  const stepId = String(req.params.stepId);
   try {
-    const campaign = await prisma.campaign.findUnique({ where: { id: req.params.campaignId } });
+    const campaign = await prisma.campaign.findUnique({ where: { id: campaignId } });
     if (!campaign || campaign.user_id !== req.user!.uid) return res.status(403).json({ error: 'Unauthorized' });
     
     await prisma.campaignStep.delete({
-      where: { id: req.params.stepId, campaign_id: req.params.campaignId }
+      where: { id: stepId, campaign_id: campaignId }
     });
     res.json({ success: true });
   } catch (error) {

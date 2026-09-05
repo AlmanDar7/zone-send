@@ -89,47 +89,74 @@ router.post('/bulk', async (req: AuthRequest, res) => {
     const { contacts } = req.body;
     if (!contacts || !Array.isArray(contacts)) return res.status(400).json({ error: 'Invalid input' });
 
-    // Since we need to return the IDs, we have to insert them one by one or get their IDs back.
-    // createMany doesn't return created records in MySQL (only count).
-    // Let's insert them individually in a transaction if possible, or just Promise.all
     const createdContacts = await prisma.$transaction(
       contacts.map((c: any) => prisma.contact.create({
         data: {
           user_id: req.user!.uid,
           email: c.email,
           name: c.name || null,
+          first_name: c.first_name || null,
+          last_name: c.last_name || null,
           company_name: c.company_name || null,
-          first_name: c.first_name || c.name?.split(' ')[0] || null,
-          last_name: c.last_name || c.name?.split(' ').slice(1).join(' ') || null,
           phone: c.phone || null,
-          status: 'active',
+          status: c.status || 'active',
           campaign_id: c.campaign_id || null,
-        },
-        select: { id: true }
+        }
       }))
     );
-    
-    res.json(createdContacts.map(c => c.id));
+
+    res.json(createdContacts);
   } catch (error) {
     console.error(error);
-    res.status(500).json({ error: 'Failed to bulk create contacts' });
+    res.status(500).json({ error: 'Failed to create contacts in bulk' });
   }
 });
 
 // PUT /api/contacts/bulk-update
 router.put('/bulk-update', async (req: AuthRequest, res) => {
   try {
-    const { ids, data } = req.body;
+    const { ids, updates } = req.body;
     if (!ids || !Array.isArray(ids)) return res.status(400).json({ error: 'Invalid input' });
 
     await prisma.contact.updateMany({
-      where: { id: { in: ids }, user_id: req.user!.uid },
-      data
+      where: {
+        id: { in: ids },
+        user_id: req.user!.uid
+      },
+      data: updates
     });
+
     res.json({ success: true });
   } catch (error) {
     console.error(error);
     res.status(500).json({ error: 'Failed to bulk update contacts' });
+  }
+});
+
+// POST /api/contacts/bulk-delete
+router.post('/bulk-delete', async (req: AuthRequest, res) => {
+  try {
+    const { ids } = req.body;
+    if (!ids || !Array.isArray(ids)) return res.status(400).json({ error: 'Invalid input' });
+
+    await prisma.contactFolderMember.deleteMany({
+      where: { contact_id: { in: ids } }
+    });
+    await prisma.contactTag.deleteMany({
+      where: { contact_id: { in: ids } }
+    });
+
+    await prisma.contact.deleteMany({
+      where: {
+        id: { in: ids },
+        user_id: req.user!.uid
+      }
+    });
+
+    res.json({ success: true });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Failed to bulk delete contacts' });
   }
 });
 
@@ -165,17 +192,18 @@ router.post('/folders', async (req: AuthRequest, res) => {
 
 // DELETE /api/contacts/:id
 router.delete('/:id', async (req: AuthRequest, res) => {
+  const id = String(req.params.id);
   try {
-    const existing = await prisma.contact.findUnique({ where: { id: req.params.id } });
+    const existing = await prisma.contact.findUnique({ where: { id } });
     if (!existing || existing.user_id !== req.user!.uid) {
       return res.status(404).json({ error: 'Contact not found' });
     }
     
     // Delete relations first (if cascade is not setup)
-    await prisma.contactFolderMember.deleteMany({ where: { contact_id: req.params.id }});
-    await prisma.contactTag.deleteMany({ where: { contact_id: req.params.id }});
+    await prisma.contactFolderMember.deleteMany({ where: { contact_id: id }});
+    await prisma.contactTag.deleteMany({ where: { contact_id: id }});
     
-    await prisma.contact.delete({ where: { id: req.params.id } });
+    await prisma.contact.delete({ where: { id } });
     res.json({ success: true });
   } catch (error) {
     console.error(error);
@@ -220,18 +248,19 @@ router.get('/contact-tags', async (req: AuthRequest, res) => {
   }
 });
 
-// DELETE /api/contacts/contact-tags
+// DELETE /api/contacts/contact-tags/:contactId/:tagId
 router.delete('/contact-tags/:contactId/:tagId', async (req: AuthRequest, res) => {
+  const contactId = String(req.params.contactId);
+  const tagId = String(req.params.tagId);
   try {
-    // Basic verification of ownership
-    const contact = await prisma.contact.findUnique({ where: { id: req.params.contactId } });
+    const contact = await prisma.contact.findUnique({ where: { id: contactId } });
     if (!contact || contact.user_id !== req.user!.uid) return res.status(403).json({ error: 'Unauthorized' });
     
     await prisma.contactTag.delete({
       where: {
         contact_id_tag_id: {
-          contact_id: req.params.contactId,
-          tag_id: req.params.tagId
+          contact_id: contactId,
+          tag_id: tagId
         }
       }
     });
@@ -273,12 +302,13 @@ router.post('/tags', async (req: AuthRequest, res) => {
 
 // DELETE /api/contacts/tags/:id
 router.delete('/tags/:id', async (req: AuthRequest, res) => {
+  const id = String(req.params.id);
   try {
-    const existing = await prisma.tag.findUnique({ where: { id: req.params.id } });
+    const existing = await prisma.tag.findUnique({ where: { id } });
     if (!existing || existing.user_id !== req.user!.uid) return res.status(403).json({ error: 'Unauthorized' });
     
-    await prisma.contactTag.deleteMany({ where: { tag_id: req.params.id } });
-    await prisma.tag.delete({ where: { id: req.params.id } });
+    await prisma.contactTag.deleteMany({ where: { tag_id: id } });
+    await prisma.tag.delete({ where: { id } });
     res.json({ success: true });
   } catch (error) {
     res.status(500).json({ error: 'Failed to delete tag' });
@@ -318,12 +348,13 @@ router.post('/folder-members/remove', async (req: AuthRequest, res) => {
 
 // PUT /api/contacts/folders/:id
 router.put('/folders/:id', async (req: AuthRequest, res) => {
+  const id = String(req.params.id);
   try {
-    const existing = await prisma.contactFolder.findUnique({ where: { id: req.params.id } });
+    const existing = await prisma.contactFolder.findUnique({ where: { id } });
     if (!existing || existing.user_id !== req.user!.uid) return res.status(403).json({ error: 'Unauthorized' });
     
     const updated = await prisma.contactFolder.update({
-      where: { id: req.params.id },
+      where: { id },
       data: { name: req.body.name }
     });
     res.json(updated);
@@ -334,12 +365,13 @@ router.put('/folders/:id', async (req: AuthRequest, res) => {
 
 // DELETE /api/contacts/folders/:id
 router.delete('/folders/:id', async (req: AuthRequest, res) => {
+  const id = String(req.params.id);
   try {
-    const existing = await prisma.contactFolder.findUnique({ where: { id: req.params.id } });
+    const existing = await prisma.contactFolder.findUnique({ where: { id } });
     if (!existing || existing.user_id !== req.user!.uid) return res.status(403).json({ error: 'Unauthorized' });
     
-    await prisma.contactFolderMember.deleteMany({ where: { folder_id: req.params.id } });
-    await prisma.contactFolder.delete({ where: { id: req.params.id } });
+    await prisma.contactFolderMember.deleteMany({ where: { folder_id: id } });
+    await prisma.contactFolder.delete({ where: { id } });
     res.json({ success: true });
   } catch (error) {
     res.status(500).json({ error: 'Failed to delete folder' });
@@ -348,12 +380,13 @@ router.delete('/folders/:id', async (req: AuthRequest, res) => {
 
 // PUT /api/contacts/:id
 router.put('/:id', async (req: AuthRequest, res) => {
+  const id = String(req.params.id);
   try {
-    const existing = await prisma.contact.findUnique({ where: { id: req.params.id } });
+    const existing = await prisma.contact.findUnique({ where: { id } });
     if (!existing || existing.user_id !== req.user!.uid) return res.status(403).json({ error: 'Unauthorized' });
     
     const updated = await prisma.contact.update({
-      where: { id: req.params.id },
+      where: { id },
       data: req.body
     });
     res.json(updated);

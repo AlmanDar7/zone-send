@@ -38,7 +38,8 @@ const FormPublishWizard = () => {
   };
 
   const copyEmbedCode = () => {
-    const code = `<script src="https://app.reachquix.com/forms/embed/${id}.js" async></script>\n<div id="rq-form-${id}"></div>`;
+    const apiBase = import.meta.env.VITE_API_URL || "http://localhost:5000/api";
+    const code = `<script src="${apiBase}/public/forms/${id}/embed.js" async></script>\n<div id="rq-form-${id}"></div>`;
     navigator.clipboard.writeText(code);
     setCopied(true);
     toast.success("Embed code copied to clipboard");
@@ -46,7 +47,7 @@ const FormPublishWizard = () => {
   };
 
   const copyLink = () => {
-    const link = `https://app.reachquix.com/f/${id}`;
+    const link = `${window.location.origin}/f/${id}`;
     navigator.clipboard.writeText(link);
     toast.success("Direct link copied to clipboard");
   };

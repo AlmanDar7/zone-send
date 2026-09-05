@@ -9,10 +9,11 @@ router.use(requireAuth);
 // GET /api/queue - list email queue items
 router.get('/', async (req: AuthRequest, res) => {
   try {
-    const { status, campaign_id } = req.query;
+    const status = req.query.status ? String(req.query.status) : undefined;
+    const campaign_id = req.query.campaign_id ? String(req.query.campaign_id) : undefined;
     const where: any = { user_id: req.user!.uid };
-    if (status && status !== 'all') where.status = status as string;
-    if (campaign_id && campaign_id !== 'all') where.campaign_id = campaign_id as string;
+    if (status && status !== 'all') where.status = status;
+    if (campaign_id && campaign_id !== 'all') where.campaign_id = campaign_id;
 
     const items = await prisma.emailQueue.findMany({
       where,
@@ -40,19 +41,36 @@ router.get('/', async (req: AuthRequest, res) => {
 
 // PUT /api/queue/:id/retry - retry a failed email
 router.put('/:id/retry', async (req: AuthRequest, res) => {
+  const id = String(req.params.id);
   try {
-    const existing = await prisma.emailQueue.findUnique({ where: { id: req.params.id } });
+    const existing = await prisma.emailQueue.findUnique({ where: { id } });
     if (!existing || existing.user_id !== req.user!.uid) {
       return res.status(404).json({ error: 'Queue item not found' });
     }
     const updated = await prisma.emailQueue.update({
-      where: { id: req.params.id },
+      where: { id },
       data: { status: 'pending', error_message: null }
     });
     res.json(updated);
   } catch (error) {
     console.error(error);
     res.status(500).json({ error: 'Failed to retry queue item' });
+  }
+});
+
+// POST /api/queue - create a single queue item
+router.post('/', async (req: AuthRequest, res) => {
+  try {
+    const item = await prisma.emailQueue.create({
+      data: {
+        ...req.body,
+        user_id: req.user!.uid,
+      },
+    });
+    res.json(item);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Failed to create queue item' });
   }
 });
 

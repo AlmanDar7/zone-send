@@ -239,7 +239,36 @@ const VisualTemplateCanvas = ({
       {sidebar ? (
         <div className={cn("grid gap-4", !hideSidebar && !hideCanvas && "lg:grid-cols-[minmax(200px,240px)_minmax(0,1fr)] lg:items-start")}>
           {!hideSidebar && sidebarPanel}
-          {!hideCanvas && <div className="min-w-0 space-y-3">{canvas}</div>}
+          {!hideCanvas && (
+            <div className="min-w-0 space-y-3">
+              <div className="flex items-center justify-between gap-2 rounded-lg border border-border bg-muted/30 px-3 py-2">
+                <p className="text-xs text-muted-foreground">
+                  <span className="font-medium text-foreground">Click</span> section to edit · <span className="font-medium text-foreground">Drag</span> to reorder
+                </p>
+                <div className="flex items-center gap-2">
+                  <div className="flex items-center rounded-md border border-border bg-background p-0.5">
+                    <button
+                      type="button"
+                      onClick={() => setPreviewMode("desktop")}
+                      title="Desktop preview"
+                      className={cn("p-1.5 rounded-sm text-muted-foreground transition-colors", previewMode === "desktop" && "bg-muted text-foreground font-medium")}
+                    >
+                      <Monitor className="h-3.5 w-3.5" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setPreviewMode("mobile")}
+                      title="Mobile preview"
+                      className={cn("p-1.5 rounded-sm text-muted-foreground transition-colors", previewMode === "mobile" && "bg-muted text-foreground font-medium")}
+                    >
+                      <Smartphone className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+                </div>
+              </div>
+              {canvas}
+            </div>
+          )}
         </div>
       ) : (
         <div className="space-y-3">

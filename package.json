@@ -1,0 +1,18 @@
+{
+  "name": "reachquix-monorepo",
+  "version": "1.0.0",
+  "description": "ReachQuix cold email platform monorepo",
+  "private": true,
+  "scripts": {
+    "dev:backend": "npm --prefix ReachQuixBackend run dev",
+    "dev:user": "npm --prefix ReachQuixUser run dev",
+    "dev:admin": "npm --prefix ReachQuixAdmin run dev",
+    "build:backend": "npm --prefix ReachQuixBackend run build",
+    "build:user": "npm --prefix ReachQuixUser run build",
+    "build:admin": "npm --prefix ReachQuixAdmin run build",
+    "build": "npm run build:backend && npm run build:user && npm run build:admin",
+    "prisma:studio": "npm --prefix ReachQuixBackend exec prisma studio",
+    "prisma:generate": "npm --prefix ReachQuixBackend exec prisma generate",
+    "create:admin": "npm --prefix ReachQuixBackend run create:admin"
+  }
+}

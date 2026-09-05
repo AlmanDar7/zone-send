@@ -77,16 +77,11 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   const signIn = async (email: string, password: string) => {
     const appUser = await signInWithEmail(email, password);
-    if (!appUser.emailVerified) {
-      await signOutUser();
-      throw new Error("Please verify your email before signing in.");
-    }
     setUser(appUser);
   };
 
   const signInWithGoogleHandler = async () => {
-    const appUser = await signInWithGoogle();
-    setUser(appUser);
+    await signInWithGoogle();
   };
 
   const signOut = async () => {

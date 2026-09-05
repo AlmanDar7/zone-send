@@ -318,6 +318,7 @@ const Campaigns = ({ variant = "campaigns" }: CampaignsProps) => {
           { value: "all", label: "All" },
           { value: "draft", label: "Draft" },
           { value: "running", label: "Running" },
+          { value: "scheduled", label: "Scheduled" },
           { value: "paused", label: "Paused" },
           { value: "completed", label: "Completed" },
         ]}
@@ -325,7 +326,7 @@ const Campaigns = ({ variant = "campaigns" }: CampaignsProps) => {
         onViewModeChange={setViewMode}
         primaryAction={
           isWorkflowsPage
-            ? { label: "+ New workflow", onClick: () => setCreateOpen(true) }
+            ? { label: "+ New workflow", onClick: () => navigate("/workflows/builder") }
             : { label: "+ New campaign", onClick: () => navigate("/campaigns/new") }
         }
         extraActions={
@@ -417,7 +418,7 @@ const Campaigns = ({ variant = "campaigns" }: CampaignsProps) => {
               : "No campaigns yet. Create one to start sending emails."}
           </p>
           {isWorkflowsPage && (
-            <Button className="mt-4" onClick={() => setCreateOpen(true)}>
+            <Button className="mt-4" onClick={() => navigate("/workflows/builder")}>
               + New workflow
             </Button>
           )}

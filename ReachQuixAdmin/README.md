@@ -1,32 +1,32 @@
-# React + TypeScript + Vite
+# ReachQuix Admin Panel
 
-This template provides a minimal setup to get React working in Vite with HMR and some Oxlint rules.
+Administrative management dashboard for ReachQuix platform analytics, user management, and system monitoring.
 
-Currently, two official plugins are available:
+## Tech Stack
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+- **Frontend:** React 18, Vite, TypeScript, Tailwind CSS, Radix UI, TanStack Query
+- **Authentication:** Firebase Auth
+- **Backend Service:** ReachQuix Express API (`http://localhost:5000/api/admin`) with Prisma ORM & MySQL
 
-## React Compiler
+## Local Development
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
-
-## Expanding the Oxlint configuration
-
-If you are developing a production application, we recommend enabling type-aware lint rules by installing `oxlint-tsgolint` and editing `.oxlintrc.json`:
-
-```json
-{
-  "$schema": "./node_modules/oxlint/configuration_schema.json",
-  "plugins": ["react", "typescript", "oxc"],
-  "options": {
-    "typeAware": true
-  },
-  "rules": {
-    "react/rules-of-hooks": "error",
-    "react/only-export-components": ["warn", { "allowConstantExport": true }]
-  }
-}
+```sh
+npm install
+npm run dev
 ```
 
-See the [Oxlint rules documentation](https://oxc.rs/docs/guide/usage/linter/rules) for the full list of rules and categories.
+The admin panel runs at `http://localhost:8081`.
+
+## Environment Variables
+
+Configured in `.env`:
+
+```env
+VITE_FIREBASE_API_KEY=AIzaSyBwIKbL1IFPslhOs-HiWQ1FyQvCh1dIGD8
+VITE_FIREBASE_AUTH_DOMAIN=reachquix-64323.firebaseapp.com
+VITE_FIREBASE_PROJECT_ID=reachquix-64323
+VITE_FIREBASE_STORAGE_BUCKET=reachquix-64323.firebasestorage.app
+VITE_FIREBASE_MESSAGING_SENDER_ID=762504209749
+VITE_FIREBASE_APP_ID=1:762504209749:web:7605f5a9703712c7affbdc
+VITE_FIREBASE_MEASUREMENT_ID=G-4RS4618LRL
+```

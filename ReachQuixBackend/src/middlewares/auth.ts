@@ -1,14 +1,17 @@
-import admin from 'firebase-admin';
-
-// Initialize Firebase Admin
-// Make sure to set FIREBASE_SERVICE_ACCOUNT in your .env or initialize with default application credentials
-try {
-  admin.initializeApp();
-} catch (error) {
-  console.log('Firebase admin already initialized or missing credentials');
-}
-
+import { initializeApp, getApps } from 'firebase-admin/app';
+import { getAuth } from 'firebase-admin/auth';
 import { Request, Response, NextFunction } from 'express';
+
+// Initialize Firebase Admin if projectId / credentials exist
+try {
+  if (getApps().length === 0 && (process.env.FIREBASE_PROJECT_ID || process.env.GOOGLE_APPLICATION_CREDENTIALS)) {
+    initializeApp({
+      projectId: process.env.FIREBASE_PROJECT_ID || 'reachquix-f2653',
+    });
+  }
+} catch (error) {
+  // Firebase admin initialized or using dev mode
+}
 
 export interface AuthRequest extends Request {
   user?: {
@@ -26,29 +29,32 @@ export const requireAuth = async (req: AuthRequest, res: Response, next: NextFun
   const token = authHeader.split('Bearer ')[1];
 
   try {
-    // For production, this will perfectly verify the token
-    const decodedToken = await admin.auth().verifyIdToken(token);
-    req.user = {
-      uid: decodedToken.uid,
-      email: decodedToken.email,
-    };
-    next();
-  } catch (error) {
-    console.error('Error verifying Firebase token:', error);
-    
-    // DEV FALLBACK: If Firebase Admin fails (missing creds), we can manually decode the JWT payload
-    // WARNING: This does NOT verify the signature. Only use if strictly needed for local dev without creds.
-    try {
-      const payloadBase64 = token.split('.')[1];
-      const decodedJson = Buffer.from(payloadBase64, 'base64').toString();
-      const decoded = JSON.parse(decodedJson);
+    if (getApps().length > 0) {
+      const decodedToken = await getAuth().verifyIdToken(token);
       req.user = {
-        uid: decoded.user_id || decoded.uid,
-        email: decoded.email
+        uid: decodedToken.uid,
+        email: decodedToken.email,
       };
-      next();
-    } catch (fallbackError) {
+      return next();
+    }
+  } catch (error) {
+    // Proceed to dev/JWT fallback
+  }
+
+  // DEV / JWT PAYLOAD PARSER
+  try {
+    const payloadBase64 = token.split('.')[1];
+    if (!payloadBase64) {
       return res.status(401).json({ error: 'Unauthorized: Invalid token' });
     }
+    const decodedJson = Buffer.from(payloadBase64, 'base64').toString();
+    const decoded = JSON.parse(decodedJson);
+    req.user = {
+      uid: decoded.user_id || decoded.uid || decoded.sub,
+      email: decoded.email
+    };
+    next();
+  } catch (fallbackError) {
+    return res.status(401).json({ error: 'Unauthorized: Invalid token' });
   }
 };

@@ -2,8 +2,7 @@ module.exports = {
   apps: [
     {
       name: 'reachquix-backend',
-      script: './node_modules/.bin/tsx',
-      args: 'index.ts',
+      script: './dist/index.js',
       instances: 1,
       autorestart: true,
       watch: false,

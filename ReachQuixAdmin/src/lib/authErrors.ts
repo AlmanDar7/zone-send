@@ -1,4 +1,4 @@
-/** Map Supabase / OAuth errors to actionable messages for the UI. */
+/** Map Firebase / OAuth errors to actionable messages for the UI. */
 export function getOAuthErrorMessage(error: unknown): string {
   const raw =
     error instanceof Error

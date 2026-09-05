@@ -5,9 +5,10 @@ import { getFirebaseAuth } from "@/integrations/firebase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Mail, Eye, EyeOff, Lock } from "lucide-react";
+import { Eye, EyeOff } from "lucide-react";
 import { motion } from "framer-motion";
 import { toast } from "sonner";
+import { ReachQuixIcon } from "@/components/AppLogo";
 
 const ResetPassword = () => {
   const navigate = useNavigate();
@@ -70,16 +71,16 @@ const ResetPassword = () => {
 
   if (!oobCode) {
     return (
-      <div className="min-h-screen bg-background flex items-center justify-center p-8">
-        <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} className="w-full max-w-sm space-y-6 text-center">
-          <div className="flex items-center justify-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-primary flex items-center justify-center">
-              <Mail className="w-5 h-5 text-primary-foreground" />
-            </div>
-            <h1 className="font-display font-bold text-xl text-foreground">Reachquix</h1>
+      <div className="min-h-screen bg-background flex items-center justify-center p-4 sm:p-8">
+        <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} className="w-full max-w-sm space-y-6 text-center rounded-3xl border border-border/80 bg-card p-6 sm:p-8 shadow-sm">
+          <div className="flex justify-center">
+            <ReachQuixIcon size="xl" className="shadow-md" />
           </div>
-          <p className="text-muted-foreground">Invalid or expired reset link. Please request a new one from the login page.</p>
-          <Button onClick={() => navigate("/login")} variant="outline" className="w-full">
+          <div className="space-y-1">
+            <h1 className="font-display font-bold text-xl text-foreground">Link Expired</h1>
+            <p className="text-xs text-muted-foreground">Invalid or expired reset link. Please request a new one from the login page.</p>
+          </div>
+          <Button onClick={() => navigate("/login")} variant="outline" className="w-full h-11 rounded-xl">
             Back to Login
           </Button>
         </motion.div>
@@ -88,21 +89,19 @@ const ResetPassword = () => {
   }
 
   return (
-    <div className="min-h-screen bg-background flex items-center justify-center p-8">
-      <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} className="w-full max-w-sm space-y-8">
+    <div className="min-h-screen bg-background flex items-center justify-center p-4 sm:p-8">
+      <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} className="w-full max-w-sm space-y-6 rounded-3xl border border-border/80 bg-card p-6 sm:p-8 shadow-sm">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-primary flex items-center justify-center">
-            <Lock className="w-5 h-5 text-primary-foreground" />
-          </div>
+          <ReachQuixIcon size="lg" />
           <div>
             <h1 className="font-display font-bold text-xl text-foreground">Set New Password</h1>
-            <p className="text-xs text-muted-foreground">Enter your new password below</p>
+            <p className="text-xs text-muted-foreground">Enter your new secure password below</p>
           </div>
         </div>
 
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <form onSubmit={handleSubmit} className="space-y-4 pt-2">
           <div className="space-y-2">
-            <Label>New Password</Label>
+            <Label className="text-xs font-semibold uppercase text-muted-foreground">New Password</Label>
             <div className="relative">
               <Input
                 type={showPassword ? "text" : "password"}
@@ -111,7 +110,7 @@ const ResetPassword = () => {
                 onChange={(e) => setPassword(e.target.value)}
                 required
                 minLength={6}
-                className="pr-10"
+                className="pr-10 h-11 rounded-xl"
               />
               <button
                 type="button"
@@ -123,7 +122,7 @@ const ResetPassword = () => {
             </div>
           </div>
           <div className="space-y-2">
-            <Label>Confirm Password</Label>
+            <Label className="text-xs font-semibold uppercase text-muted-foreground">Confirm Password</Label>
             <Input
               type={showPassword ? "text" : "password"}
               placeholder="••••••••"
@@ -131,9 +130,10 @@ const ResetPassword = () => {
               onChange={(e) => setConfirmPassword(e.target.value)}
               required
               minLength={6}
+              className="h-11 rounded-xl"
             />
           </div>
-          <Button type="submit" className="w-full" disabled={loading}>
+          <Button type="submit" className="w-full h-11 rounded-xl font-semibold" disabled={loading}>
             {loading ? "Updating..." : "Update Password"}
           </Button>
         </form>

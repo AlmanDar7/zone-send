@@ -5,7 +5,8 @@ import {
   sendEmailVerification,
   sendPasswordResetEmail,
   signInWithEmailAndPassword,
-  signInWithPopup,
+  signInWithRedirect,
+  getRedirectResult,
   signOut,
   updatePassword,
   updateProfile,
@@ -72,8 +73,13 @@ export async function signInWithGoogle() {
   const auth = requireFirebaseAuth();
   const provider = new GoogleAuthProvider();
   provider.setCustomParameters({ prompt: "select_account" });
-  const result = await signInWithPopup(auth, provider);
-  return mapFirebaseUser(result.user);
+  await signInWithRedirect(auth, provider);
+}
+
+export async function checkRedirectResult() {
+  const auth = getFirebaseAuth();
+  const result = await getRedirectResult(auth);
+  return result ? mapFirebaseUser(result.user) : null;
 }
 
 export async function signOutUser() {

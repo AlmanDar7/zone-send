@@ -1,9 +1,15 @@
 import { getAccessToken } from './getAccessToken';
 
-const API_BASE_URL = 'http://localhost:5000/api';
+const API_BASE_URL =
+  import.meta.env.VITE_API_URL ||
+  (typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
+    ? 'http://localhost:5000/api'
+    : (typeof window !== 'undefined' && window.location.hostname.endsWith('reachquix.com')
+        ? 'https://backend.reachquix.com/api'
+        : '/api'));
 
 const customFetch = async (endpoint: string, options: RequestInit = {}) => {
-  const token = await getAuthToken();
+  const token = await getAccessToken();
   const headers = {
     'Content-Type': 'application/json',
     ...(token ? { Authorization: `Bearer ${token}` } : {}),
@@ -84,6 +90,7 @@ export const api = {
       create: (campaignId: string, data: any) => customFetch(`/campaigns/${campaignId}/steps`, { method: 'POST', body: JSON.stringify(data) }),
       update: (campaignId: string, stepId: string, data: any) => customFetch(`/campaigns/${campaignId}/steps/${stepId}`, { method: 'PUT', body: JSON.stringify(data) }),
       delete: (campaignId: string, stepId: string) => customFetch(`/campaigns/${campaignId}/steps/${stepId}`, { method: 'DELETE' }),
+      sync: (campaignId: string, steps: any[]) => customFetch(`/campaigns/${campaignId}/steps/sync`, { method: 'PUT', body: JSON.stringify({ steps }) }),
     }
   },
   settings: {

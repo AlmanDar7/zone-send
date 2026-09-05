@@ -1,4 +1,4 @@
-/** Map Supabase / OAuth errors to actionable messages for the UI. */
+/** Map Firebase / OAuth errors to actionable messages for the UI. */
 export function getOAuthErrorMessage(error: unknown): string {
   const raw =
     error instanceof Error
@@ -18,11 +18,15 @@ export function getOAuthErrorMessage(error: unknown): string {
   }
 
   if (lower.includes("auth/unauthorized-domain")) {
-    return "This domain is not authorized for Firebase. Add localhost in Firebase → Authentication → Settings → Authorized domains.";
+    return "This domain is not authorized. Please add user.reachquix.com to Firebase Console → Authentication → Settings → Authorized domains.";
+  }
+
+  if (lower.includes("auth/network-request-failed") || lower.includes("network-request-failed")) {
+    return "Network request blocked. If using Brave or an adblocker, disable Shields for this site and verify user.reachquix.com is in Firebase Authorized Domains.";
   }
 
   if (lower.includes("auth/operation-not-allowed")) {
-    return "This sign-in method is disabled in Firebase. Enable Email/Password or Google under Authentication → Sign-in method.";
+    return "This sign-in method is disabled in Firebase. Enable Google under Authentication → Sign-in method in Firebase Console.";
   }
 
   if (lower.includes("access_denied") || lower.includes("cancelled")) {

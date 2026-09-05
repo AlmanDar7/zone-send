@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
-import { requestPasswordReset } from "@/lib/firebaseAuth";
+import { requestPasswordReset, checkRedirectResult } from "@/lib/firebaseAuth";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -29,6 +29,12 @@ const getAuthErrorMessage = (error: unknown) => {
   }
   if (message.includes("email-already-in-use")) return "Email already exists.";
   if (message.includes("verify your email")) return message;
+  if (message.includes("network-request-failed")) {
+    return "Network request blocked. If using Brave or an ad blocker, disable Shields for this site, and ensure user.reachquix.com is in Firebase Authorized Domains.";
+  }
+  if (message.includes("unauthorized-domain")) {
+    return "Domain not authorized. Please add user.reachquix.com to Firebase Console → Authentication → Settings → Authorized domains.";
+  }
 
   return message;
 };
@@ -53,6 +59,20 @@ const Login = () => {
       }
     }
   }, [authLoading, navigate, user]);
+
+  useEffect(() => {
+    const checkRedirect = async () => {
+      try {
+        setOauthLoading(true);
+        await checkRedirectResult();
+      } catch (error) {
+        toast.error(getOAuthErrorMessage(error));
+      } finally {
+        setOauthLoading(false);
+      }
+    };
+    checkRedirect();
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -80,14 +100,11 @@ const Login = () => {
 
   const handleGoogleSignIn = async () => {
     setOauthLoading(true);
-
     try {
       await signInWithGoogle();
-      toast.success("Logged in successfully");
-      navigate("/dashboard");
+      // Code won't reach here since the browser redirects
     } catch (error) {
       toast.error(getOAuthErrorMessage(error));
-    } finally {
       setOauthLoading(false);
     }
   };

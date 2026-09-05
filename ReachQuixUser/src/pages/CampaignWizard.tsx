@@ -503,6 +503,7 @@ const CampaignWizard = () => {
 
       await api.templates.update(selectedTemplate.id, {
         subject,
+        preview_text: previewText.trim(),
         body: visualContent.body,
         html_body: finalHtml,
         blocks: null,
@@ -523,6 +524,8 @@ const CampaignWizard = () => {
         delay_unit: "days",
         delay_days: 0,
         template_id: selectedTemplate.id,
+        subject_a: subject,
+        preview_text_a: previewText.trim(),
       });
 
       // Tag recipient contacts to this campaign

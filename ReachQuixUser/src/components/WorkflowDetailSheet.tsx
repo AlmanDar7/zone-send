@@ -1,5 +1,6 @@
-import { BarChart3, Pause, Play, Trash2 } from "lucide-react";
+import { BarChart3, Pause, Play, Trash2, Layers } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { useNavigate } from "react-router-dom";
 import CampaignStepsPanel from "@/components/CampaignStepsPanel";
 import {
   Sheet,
@@ -83,6 +84,7 @@ const WorkflowDetailSheet = ({
   onStart,
   onDelete,
 }: WorkflowDetailSheetProps) => {
+  const navigate = useNavigate();
   if (!campaign) return null;
 
   const statusClass = statusStyles[campaign.status] || statusStyles.Draft;
@@ -130,6 +132,10 @@ const WorkflowDetailSheet = ({
           </div>
 
           <div className="mt-5 flex flex-wrap gap-2">
+            <Button size="sm" className="h-8 shadow-sm" onClick={() => navigate(`/workflows/${campaign.id}/builder`)}>
+              <Layers className="mr-1.5 h-3.5 w-3.5" />
+              Visual Graph Builder
+            </Button>
             <Button size="sm" variant="secondary" className="h-8 shadow-sm" onClick={onViewAnalytics}>
               <BarChart3 className="mr-1.5 h-3.5 w-3.5" />
               Analytics

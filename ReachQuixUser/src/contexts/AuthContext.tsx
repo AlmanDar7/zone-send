@@ -85,8 +85,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   };
 
   const signInWithGoogleHandler = async () => {
-    const appUser = await signInWithGoogle();
-    setUser(appUser);
+    await signInWithGoogle();
   };
 
   const signOut = async () => {

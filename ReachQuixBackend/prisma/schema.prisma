@@ -52,6 +52,8 @@ model CampaignStep {
   step_number     Int
   subject_a       String?
   subject_b       String?
+  preview_text_a  String?
+  preview_text_b  String?
   template_id     String?
   winning_variant String?
   campaign        Campaign       @relation(fields: [campaign_id], references: [id])
@@ -134,6 +136,7 @@ model EmailTemplate {
   html_body       String?        @db.Text
   name            String
   subject         String
+  preview_text    String?        @db.Text
   tags            Json? // Using Json since array strings aren't native in MySQL
   template_format String         @default("visual")
   thumbnail_url   String?
@@ -243,4 +246,25 @@ model TemplateSection {
   user_id    String
 
   @@map("template_sections")
+}
+
+model SystemSetting {
+  id         String   @id @default(uuid())
+  key        String   @unique
+  value      String   @db.Text
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  @@map("system_settings")
+}
+
+model AuditLog {
+  id         String   @id @default(uuid())
+  user_id    String?
+  action     String
+  details    Json?
+  ip_address String?
+  created_at DateTime @default(now())
+
+  @@map("audit_logs")
 }

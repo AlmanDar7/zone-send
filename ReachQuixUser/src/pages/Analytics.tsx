@@ -266,7 +266,11 @@ const Analytics = () => {
             <AreaChart data={growthData}>
               <defs>
                 <linearGradient id="growthGrad" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor="hsl(210, 92%, 55%)" stopOpacity={0.3} />
+                  <stop offset="0%" stopColor="hsl(158, 64%, 32%)" stopOpacity={0.3} />
+                  <stop offset="100%" stopColor="hsl(158, 64%, 32%)" stopOpacity={0} />
+                </linearGradient>
+                <linearGradient id="newSubGrad" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor="hsl(210, 92%, 55%)" stopOpacity={0.25} />
                   <stop offset="100%" stopColor="hsl(210, 92%, 55%)" stopOpacity={0} />
                 </linearGradient>
               </defs>
@@ -284,10 +288,18 @@ const Analytics = () => {
               <Area
                 type="monotone"
                 dataKey="subscribers"
-                stroke="hsl(210, 92%, 55%)"
+                stroke="hsl(158, 64%, 32%)"
                 fill="url(#growthGrad)"
                 strokeWidth={2}
-                name="New Subscribers"
+                name="Total Audience"
+              />
+              <Area
+                type="monotone"
+                dataKey="newSubscribers"
+                stroke="hsl(210, 92%, 55%)"
+                fill="url(#newSubGrad)"
+                strokeWidth={2}
+                name="New Additions"
               />
             </AreaChart>
           </ResponsiveContainer>

@@ -9,7 +9,7 @@ router.use(requireAuth);
 
 // GET /api/templates
 router.get('/', async (req: AuthRequest, res) => {
-  const category = req.query.category as string;
+  const category = req.query.category ? String(req.query.category) : undefined;
   try {
     const templates = await prisma.emailTemplate.findMany({
       where: {
@@ -27,9 +27,10 @@ router.get('/', async (req: AuthRequest, res) => {
 
 // GET /api/templates/:id
 router.get('/:id', async (req: AuthRequest, res) => {
+  const id = String(req.params.id);
   try {
     const template = await prisma.emailTemplate.findUnique({
-      where: { id: req.params.id },
+      where: { id },
     });
     
     if (!template || template.user_id !== req.user!.uid) {
@@ -61,15 +62,16 @@ router.post('/', async (req: AuthRequest, res) => {
 
 // PUT /api/templates/:id
 router.put('/:id', async (req: AuthRequest, res) => {
+  const id = String(req.params.id);
   try {
     // Ensure ownership
-    const existing = await prisma.emailTemplate.findUnique({ where: { id: req.params.id } });
+    const existing = await prisma.emailTemplate.findUnique({ where: { id } });
     if (!existing || existing.user_id !== req.user!.uid) {
       return res.status(404).json({ error: 'Template not found' });
     }
 
     const template = await prisma.emailTemplate.update({
-      where: { id: req.params.id },
+      where: { id },
       data: req.body,
     });
     res.json(template);
@@ -81,13 +83,14 @@ router.put('/:id', async (req: AuthRequest, res) => {
 
 // DELETE /api/templates/:id
 router.delete('/:id', async (req: AuthRequest, res) => {
+  const id = String(req.params.id);
   try {
-    const existing = await prisma.emailTemplate.findUnique({ where: { id: req.params.id } });
+    const existing = await prisma.emailTemplate.findUnique({ where: { id } });
     if (!existing || existing.user_id !== req.user!.uid) {
       return res.status(404).json({ error: 'Template not found' });
     }
 
-    await prisma.emailTemplate.delete({ where: { id: req.params.id } });
+    await prisma.emailTemplate.delete({ where: { id } });
     res.json({ success: true });
   } catch (error) {
     console.error(error);
@@ -129,14 +132,15 @@ router.post('/brand-themes', async (req: AuthRequest, res) => {
 
 // PUT /api/templates/brand-themes/:id
 router.put('/brand-themes/:id', async (req: AuthRequest, res) => {
+  const id = String(req.params.id);
   try {
-    const existing = await prisma.brandTheme.findUnique({ where: { id: req.params.id } });
+    const existing = await prisma.brandTheme.findUnique({ where: { id } });
     if (!existing || existing.user_id !== req.user!.uid) {
       return res.status(404).json({ error: 'Brand theme not found' });
     }
 
     const theme = await prisma.brandTheme.update({
-      where: { id: req.params.id },
+      where: { id },
       data: req.body,
     });
     res.json(theme);
@@ -148,13 +152,14 @@ router.put('/brand-themes/:id', async (req: AuthRequest, res) => {
 
 // DELETE /api/templates/brand-themes/:id
 router.delete('/brand-themes/:id', async (req: AuthRequest, res) => {
+  const id = String(req.params.id);
   try {
-    const existing = await prisma.brandTheme.findUnique({ where: { id: req.params.id } });
+    const existing = await prisma.brandTheme.findUnique({ where: { id } });
     if (!existing || existing.user_id !== req.user!.uid) {
       return res.status(404).json({ error: 'Brand theme not found' });
     }
 
-    await prisma.brandTheme.delete({ where: { id: req.params.id } });
+    await prisma.brandTheme.delete({ where: { id } });
     res.json({ success: true });
   } catch (error) {
     console.error(error);
@@ -196,13 +201,14 @@ router.post('/sections', async (req: AuthRequest, res) => {
 
 // DELETE /api/templates/sections/:id
 router.delete('/sections/:id', async (req: AuthRequest, res) => {
+  const id = String(req.params.id);
   try {
-    const existing = await prisma.templateSection.findUnique({ where: { id: req.params.id } });
+    const existing = await prisma.templateSection.findUnique({ where: { id } });
     if (!existing || existing.user_id !== req.user!.uid) {
       return res.status(404).json({ error: 'Template section not found' });
     }
 
-    await prisma.templateSection.delete({ where: { id: req.params.id } });
+    await prisma.templateSection.delete({ where: { id } });
     res.json({ success: true });
   } catch (error) {
     console.error(error);
@@ -211,4 +217,3 @@ router.delete('/sections/:id', async (req: AuthRequest, res) => {
 });
 
 export default router;
-

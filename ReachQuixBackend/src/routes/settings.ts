@@ -81,7 +81,7 @@ router.post('/sending-limits', async (req: AuthRequest, res) => {
       create: {
         user_id: req.user!.uid,
         max_per_day: req.body.max_per_day || 500,
-        last_reset_date: new Date().toISOString().split('T')[0],
+        last_reset_date: new Date().toISOString().slice(0, 10),
       }
     });
     res.json(limit);
@@ -91,13 +91,57 @@ router.post('/sending-limits', async (req: AuthRequest, res) => {
   }
 });
 
-// --- Send Test Email (placeholder—will use nodemailer later) ---
+import { sendTestEmail, verifySmtp, SmtpConfig } from '../services/mailer';
+
+// --- Send Test Email & Verify SMTP ---
 router.post('/test-email', async (req: AuthRequest, res) => {
   try {
-    // For now just acknowledge; actual SMTP sending needs nodemailer
-    res.json({ success: true, message: 'Test email endpoint placeholder' });
-  } catch (error) {
-    res.status(500).json({ error: 'Failed to send test email' });
+    const { to, host, port, username, password, use_ssl, from_name, from_email } = req.body;
+    const recipientEmail = to || req.user?.email;
+
+    if (!recipientEmail) {
+      return res.status(400).json({ error: 'Recipient email address ("to") is required.' });
+    }
+
+    // Use passed config if provided, otherwise fetch user's saved SMTP settings
+    let smtpConfig: SmtpConfig | null = null;
+
+    if (host && username && password) {
+      smtpConfig = {
+        host,
+        port: Number(port) || 587,
+        username,
+        password,
+        use_ssl: use_ssl !== undefined ? Boolean(use_ssl) : false,
+        from_name: from_name || null,
+        from_email: from_email || null,
+      };
+    } else {
+      const saved = await prisma.smtpSettings.findUnique({
+        where: { user_id: req.user!.uid },
+      });
+      if (saved) {
+        smtpConfig = saved;
+      }
+    }
+
+    if (!smtpConfig || !smtpConfig.host || !smtpConfig.username || !smtpConfig.password) {
+      return res.status(400).json({ error: 'No SMTP configuration found. Please fill in and save your SMTP settings first.' });
+    }
+
+    const result = await sendTestEmail(smtpConfig, recipientEmail);
+    if (!result.success) {
+      return res.status(400).json({ error: result.error || 'Failed to send test email' });
+    }
+
+    res.json({
+      success: true,
+      message: `Test email sent successfully to ${recipientEmail}`,
+      messageId: result.messageId,
+    });
+  } catch (error: any) {
+    console.error('Error sending test email:', error);
+    res.status(500).json({ error: error.message || 'Failed to send test email' });
   }
 });
 

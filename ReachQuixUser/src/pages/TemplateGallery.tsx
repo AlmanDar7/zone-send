@@ -12,15 +12,20 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useState, useMemo } from "react";
 import TemplatePreview from "@/components/TemplatePreview";
 import { buildLeadMagnetHtmlFromOrder } from "@/lib/visual-template-sections";
+import { cn } from "@/lib/utils";
 
 type Props = {
   category: "email" | "form";
 };
 
+const EMAIL_CATEGORIES = ["All", "Lead Magnet", "Showcase", "Newsletter"];
+const FORM_CATEGORIES = ["All", "Popup", "Inline", "Full Page"];
+
 const TemplateGallery = ({ category }: Props) => {
   const navigate = useNavigate();
   const { user } = useAuth();
   
+  const [selectedCategoryTab, setSelectedCategoryTab] = useState("All");
   const [segmentModalOpen, setSegmentModalOpen] = useState(false);
   const [pendingPresetId, setPendingPresetId] = useState<string | undefined>();
   const [pendingEditId, setPendingEditId] = useState<string | undefined>();
@@ -28,7 +33,17 @@ const TemplateGallery = ({ category }: Props) => {
 
   const { templates: starterTemplates, error: starterError } = useMemo(() => {
     try {
-      const presets = visualTemplatePresets.filter((p) => p.category === category);
+      let presets = visualTemplatePresets.filter((p) => p.category === category);
+      
+      if (selectedCategoryTab !== "All") {
+        const query = selectedCategoryTab.toLowerCase();
+        presets = presets.filter((p) => 
+          p.name.toLowerCase().includes(query) || 
+          p.description.toLowerCase().includes(query) ||
+          p.id.toLowerCase().includes(query)
+        );
+      }
+
       const templates = presets.map((preset) => {
         const config = preset.createConfig();
         const html_body = buildLeadMagnetHtmlFromOrder(config);
@@ -46,7 +61,7 @@ const TemplateGallery = ({ category }: Props) => {
       console.error("Error generating starter templates:", err);
       return { templates: [], error: err.message || String(err) };
     }
-  }, [category]);
+  }, [category, selectedCategoryTab]);
 
   const { data: folders = [] } = useQuery({
     queryKey: ["contact_folders", user?.id],
@@ -61,6 +76,7 @@ const TemplateGallery = ({ category }: Props) => {
     : "Pick a layout designed for engagement, or start from scratch.";
     
   const builderUrl = isForms ? "/forms/builder" : "/emails/builder";
+  const categoryTabs = isForms ? FORM_CATEGORIES : EMAIL_CATEGORIES;
 
   const handleCreateClick = (presetId?: string, editId?: string) => {
     if (isForms) {
@@ -92,17 +108,36 @@ const TemplateGallery = ({ category }: Props) => {
 
   return (
     <div className="w-full space-y-8 px-4 py-8 sm:px-6 lg:px-10 max-w-7xl mx-auto">
-      <div className="flex flex-col items-center text-center space-y-4 pt-4 pb-8">
+      <div className="flex flex-col items-center text-center space-y-4 pt-4 pb-4">
         <h1 className="text-3xl font-display font-bold text-foreground">{title}</h1>
         <p className="text-muted-foreground text-base max-w-xl">{subtitle}</p>
         
-        {starterTemplates.length === 0 && (
+        {starterTemplates.length === 0 && starterError && (
           <div className="p-4 bg-red-50 text-red-600 rounded-lg text-center w-full max-w-md mx-auto whitespace-pre-wrap">
             Failed to load starter templates. Error: {starterError}
           </div>
         )}
 
-        <div className="pt-4">
+        {/* Category Filter Tabs */}
+        <div className="flex flex-wrap items-center justify-center gap-2 pt-2">
+          {categoryTabs.map((tab) => (
+            <button
+              key={tab}
+              type="button"
+              onClick={() => setSelectedCategoryTab(tab)}
+              className={cn(
+                "px-4 py-1.5 rounded-full text-xs font-medium transition-all",
+                selectedCategoryTab === tab
+                  ? "bg-primary text-primary-foreground shadow-sm"
+                  : "bg-muted/60 text-muted-foreground hover:bg-muted hover:text-foreground"
+              )}
+            >
+              {tab}
+            </button>
+          ))}
+        </div>
+
+        <div className="pt-2">
           <Button size="lg" onClick={() => handleCreateClick()} className="shadow-md rounded-full px-8">
             <Plus className="mr-2 h-5 w-5" />
             Start from scratch
@@ -117,13 +152,13 @@ const TemplateGallery = ({ category }: Props) => {
             initial={{ opacity: 0, y: 16 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: index * 0.1 }}
-            className="group relative flex flex-col overflow-hidden rounded-2xl border border-border bg-card shadow-sm hover:shadow-lg transition-all cursor-pointer"
+            className="group relative flex flex-col overflow-hidden rounded-2xl border border-border bg-card shadow-sm hover:shadow-lg transition-all cursor-pointer hover:border-primary/40"
             onClick={() => handleCreateClick(preset.id)}
           >
             <TemplatePreview html={starter.html_body} body={starter.body} scaled className="h-[270px] pointer-events-none" />
             
             <div className="p-5 flex-1 flex flex-col border-t border-border">
-              <h3 className="font-semibold text-lg text-foreground">{preset.name}</h3>
+              <h3 className="font-semibold text-lg text-foreground group-hover:text-primary transition-colors">{preset.name}</h3>
               <p className="mt-2 text-sm text-muted-foreground line-clamp-2">
                 {preset.description}
               </p>

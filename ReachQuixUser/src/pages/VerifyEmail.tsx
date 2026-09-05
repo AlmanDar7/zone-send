@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Mail, RefreshCw, CheckCircle } from "lucide-react";
 import { motion } from "framer-motion";
 import { toast } from "sonner";
+import { ReachQuixIcon } from "@/components/AppLogo";
 
 const VerifyEmail = () => {
   const navigate = useNavigate();
@@ -71,42 +72,42 @@ const VerifyEmail = () => {
   };
 
   return (
-    <div className="min-h-screen bg-background flex items-center justify-center p-8">
+    <div className="min-h-screen bg-background flex items-center justify-center p-4 sm:p-8">
       <motion.div
         initial={{ opacity: 0, y: 16 }}
         animate={{ opacity: 1, y: 0 }}
-        className="w-full max-w-sm space-y-8 text-center"
+        className="w-full max-w-sm space-y-6 text-center rounded-3xl border border-border/80 bg-card p-6 sm:p-8 shadow-sm"
       >
         <div className="flex justify-center">
-          <div className="w-16 h-16 rounded-2xl bg-primary/10 flex items-center justify-center">
-            <Mail className="w-8 h-8 text-primary" />
-          </div>
+          <ReachQuixIcon size="xl" className="shadow-md" />
         </div>
 
-        <div className="space-y-3">
+        <div className="space-y-2">
           <h1 className="text-2xl font-display font-bold text-foreground">Verify your email</h1>
-          <p className="text-sm text-muted-foreground">
-            We&apos;ve sent a verification link to your email. Please verify to continue.
+          <p className="text-xs text-muted-foreground">
+            We&apos;ve sent a verification link to your email address. Please click the link to activate your account.
           </p>
           {verificationEmail && (
-            <p className="text-sm font-medium text-foreground">{verificationEmail}</p>
+            <div className="rounded-xl bg-muted/50 py-2 px-3 text-xs font-semibold text-foreground break-all">
+              {verificationEmail}
+            </div>
           )}
         </div>
 
-        <div className="space-y-3">
-          <Button onClick={handleResend} variant="outline" className="w-full" disabled={resending}>
-            {resending ? <RefreshCw className="w-4 h-4 animate-spin mr-2" /> : <Mail className="w-4 h-4 mr-2" />}
-            Resend verification email
+        <div className="space-y-3 pt-2">
+          <Button onClick={handleCheckVerification} className="w-full h-11 rounded-xl font-semibold gap-2" disabled={checking}>
+            {checking ? <RefreshCw className="w-4 h-4 animate-spin" /> : <CheckCircle className="w-4 h-4" />}
+            I have verified
           </Button>
 
-          <Button onClick={handleCheckVerification} className="w-full" disabled={checking}>
-            {checking ? <RefreshCw className="w-4 h-4 animate-spin mr-2" /> : <CheckCircle className="w-4 h-4 mr-2" />}
-            I have verified
+          <Button onClick={handleResend} variant="outline" className="w-full h-11 rounded-xl font-semibold gap-2" disabled={resending}>
+            {resending ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Mail className="w-4 h-4" />}
+            Resend verification email
           </Button>
 
           <button
             onClick={handleSignOut}
-            className="text-sm text-muted-foreground hover:text-foreground transition-colors"
+            className="text-xs text-muted-foreground hover:text-foreground transition-colors pt-2 block w-full text-center"
             type="button"
           >
             Sign in with a different account

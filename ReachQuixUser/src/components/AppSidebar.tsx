@@ -1,11 +1,13 @@
-import { useState } from "react";
+import { useEffect } from "react";
 import { NavLink, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import {
   LayoutDashboard, Mail, FileText, GitBranch, Users, BarChart3, Megaphone,
-  Settings, LogOut, UserCircle2, Menu, X, Sparkles, ChevronLeft, ChevronRight
+  Settings, LogOut, UserCircle2, X, ChevronLeft, ChevronRight
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import AppLogo, { ReachQuixIcon } from "./AppLogo";
+import { prefetchCorePages, prefetchPage } from "@/lib/prefetch";
 
 const mainItems = [
   { to: "/dashboard", icon: LayoutDashboard, label: "Dashboard" },
@@ -34,6 +36,10 @@ const AppSidebar = ({ isExpanded, onToggle, mobileOpen, setMobileOpen }: AppSide
   const navigate = useNavigate();
   const { signOut } = useAuth();
 
+  useEffect(() => {
+    prefetchCorePages();
+  }, []);
+
   const handleSignOut = async () => {
     await signOut();
     navigate("/login");
@@ -51,6 +57,8 @@ const AppSidebar = ({ isExpanded, onToggle, mobileOpen, setMobileOpen }: AppSide
         key={item.to}
         to={item.to}
         onClick={() => setMobileOpen(false)}
+        onMouseEnter={() => prefetchPage(item.to)}
+        onFocus={() => prefetchPage(item.to)}
         title={!isExpanded ? item.label : undefined}
         className={cn(
           "group relative flex items-center gap-3 rounded-xl px-3.5 py-2.5 text-sm font-medium transition-all",
@@ -70,21 +78,15 @@ const AppSidebar = ({ isExpanded, onToggle, mobileOpen, setMobileOpen }: AppSide
 
   const sidebarContent = (
     <>
-      <div className={cn("flex items-center gap-3 px-6 py-6", !isExpanded && "justify-center px-2")}>
-        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-primary to-primary/70 shadow-md">
-          <Sparkles className="h-5 w-5 text-primary-foreground" />
-        </div>
-        {isExpanded && (
-          <div className="overflow-hidden">
-            <h1 className="font-display text-lg font-bold leading-tight text-foreground">
-              ReachQuix
-            </h1>
-            <p className="text-[11px] tracking-wide text-sidebar-foreground/70">EMAIL AUTOMATION</p>
-          </div>
+      <div className={cn("flex items-center gap-3 px-5 py-5 border-b border-sidebar-border/40", !isExpanded && "justify-center px-2")}>
+        {isExpanded ? (
+          <AppLogo size="sm" subtitle="Email Automation" />
+        ) : (
+          <ReachQuixIcon size="sm" />
         )}
       </div>
 
-      <nav className="flex-1 space-y-1 px-3">
+      <nav className="flex-1 space-y-1 p-3 overflow-y-auto">
         {mainItems.map(renderItem)}
       </nav>
 
@@ -105,7 +107,8 @@ const AppSidebar = ({ isExpanded, onToggle, mobileOpen, setMobileOpen }: AppSide
       
       <button
         onClick={onToggle}
-        className="hidden lg:flex absolute -right-3 top-10 h-6 w-6 items-center justify-center rounded-full border border-sidebar-border bg-sidebar text-sidebar-foreground shadow-sm hover:bg-sidebar-accent"
+        className="hidden lg:flex absolute -right-3 top-7 h-6 w-6 items-center justify-center rounded-full border border-sidebar-border bg-sidebar text-sidebar-foreground shadow-sm hover:bg-sidebar-accent"
+        aria-label={isExpanded ? "Collapse Sidebar" : "Expand Sidebar"}
       >
         {isExpanded ? <ChevronLeft className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
       </button>
@@ -117,14 +120,14 @@ const AppSidebar = ({ isExpanded, onToggle, mobileOpen, setMobileOpen }: AppSide
       {/* Mobile overlay */}
       {mobileOpen && (
         <div
-          className="fixed inset-0 z-40 bg-black/40 lg:hidden"
+          className="fixed inset-0 z-40 bg-black/50 backdrop-blur-sm lg:hidden"
           onClick={() => setMobileOpen(false)}
         />
       )}
 
       <aside
         className={cn(
-          "fixed bottom-0 left-0 top-0 z-50 flex flex-col border-r border-sidebar-border bg-sidebar transition-all duration-300",
+          "fixed bottom-0 left-0 top-0 z-50 flex flex-col border-r border-sidebar-border bg-sidebar shadow-lg transition-all duration-300",
           isExpanded ? "w-64" : "w-20",
           mobileOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0",
         )}
