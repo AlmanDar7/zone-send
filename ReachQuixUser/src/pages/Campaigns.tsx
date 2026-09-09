@@ -185,8 +185,14 @@ const Campaigns = ({ variant = "campaigns" }: CampaignsProps) => {
 
   const updateStatus = useMutation({
     mutationFn: async ({ id, status }: { id: string; status: string }) => {
-      if (status === "Running" && !hasUsableSmtpConfig(smtpSettings)) {
-        throw new Error(getSmtpConfigError());
+      if (status === "Running") {
+        const freshSmtp = await queryClient.fetchQuery({
+          queryKey: ["campaigns-smtp", user?.id],
+          queryFn: () => api.settings.smtp.get(),
+        });
+        if (!hasUsableSmtpConfig(freshSmtp)) {
+          throw new Error(getSmtpConfigError());
+        }
       }
 
       await api.campaigns.update(id, { status });

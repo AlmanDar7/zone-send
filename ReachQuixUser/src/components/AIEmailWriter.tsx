@@ -13,6 +13,32 @@ interface AIEmailWriterProps {
   onInsertSubject?: (text: string) => void;
 }
 
+const stripJsonFences = (raw: string) =>
+  raw.replace(/```json\n?/g, "").replace(/```\n?/g, "").trim();
+
+const formatAiContent = (raw: string, contentType: "subject" | "body" | "full") => {
+  const cleaned = stripJsonFences(raw);
+  if (contentType === "body") return cleaned;
+
+  try {
+    const parsed = JSON.parse(cleaned);
+    if (contentType === "full" && parsed && typeof parsed === "object") {
+      const subject = parsed.subject ? String(parsed.subject) : "";
+      const body = parsed.body ? String(parsed.body) : "";
+      if (subject && body) return `Subject: ${subject}\n\n${body}`;
+      if (subject) return `Subject: ${subject}`;
+      if (body) return body;
+    }
+    if (contentType === "subject" && Array.isArray(parsed)) {
+      return parsed.map((s, i) => `${i + 1}. ${String(s)}`).join("\n");
+    }
+  } catch {
+    // fall through to raw text
+  }
+
+  return cleaned;
+};
+
 const AIEmailWriter = ({ onInsert, onInsertSubject }: AIEmailWriterProps) => {
   const [open, setOpen] = useState(false);
   const [prompt, setPrompt] = useState("");
@@ -20,16 +46,19 @@ const AIEmailWriter = ({ onInsert, onInsertSubject }: AIEmailWriterProps) => {
   const [type, setType] = useState<"subject" | "body" | "full">("full");
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState("");
+  const [rawResult, setRawResult] = useState("");
   const [copied, setCopied] = useState(false);
 
   const generate = async () => {
     if (!prompt.trim()) return;
     setLoading(true);
     setResult("");
+    setRawResult("");
     try {
       const data = await api.ai.writeEmail({ prompt, type, tone });
       if (!data.success) throw new Error(data.error);
-      setResult(data.content);
+      setRawResult(data.content);
+      setResult(formatAiContent(data.content, type));
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : "Failed to generate";
       toast.error(message);
@@ -45,30 +74,31 @@ const AIEmailWriter = ({ onInsert, onInsertSubject }: AIEmailWriterProps) => {
   };
 
   const handleInsert = () => {
+    const source = rawResult || result;
     if (type === "full") {
       try {
-        const cleaned = result.replace(/```json\n?/g, "").replace(/```\n?/g, "").trim();
+        const cleaned = stripJsonFences(source);
         const parsed = JSON.parse(cleaned);
         if (parsed.subject && onInsertSubject) onInsertSubject(parsed.subject);
         if (parsed.body && onInsert) onInsert(parsed.body);
         toast.success("Inserted subject and body!");
       } catch {
-        if (onInsert) onInsert(result);
+        if (onInsert) onInsert(source);
         toast.success("Content inserted!");
       }
     } else if (type === "body" && onInsert) {
-      onInsert(result);
+      onInsert(source);
       toast.success("Body inserted!");
     } else if (type === "subject" && onInsertSubject) {
       try {
-        const cleaned = result.replace(/```json\n?/g, "").replace(/```\n?/g, "").trim();
+        const cleaned = stripJsonFences(source);
         const subjects = JSON.parse(cleaned);
         if (Array.isArray(subjects) && subjects.length > 0) {
           onInsertSubject(subjects[0]);
           toast.success("Subject line inserted!");
         }
       } catch {
-        onInsertSubject(result.split("\n")[0]);
+        onInsertSubject(source.split("\n")[0].replace(/^\d+\.\s*/, ""));
         toast.success("Subject inserted!");
       }
     }
@@ -141,7 +171,7 @@ const AIEmailWriter = ({ onInsert, onInsertSubject }: AIEmailWriterProps) => {
           {result && (
             <div className="space-y-3">
               <div className="bg-muted/50 rounded-lg p-4 max-h-60 overflow-y-auto">
-                <pre className="text-sm text-foreground whitespace-pre-wrap font-sans">{result}</pre>
+                <div className="text-sm text-foreground whitespace-pre-wrap">{result}</div>
               </div>
               <div className="flex gap-2">
                 <Button variant="outline" size="sm" onClick={handleCopy} className="gap-2">

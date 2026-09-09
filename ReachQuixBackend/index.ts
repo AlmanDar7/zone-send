@@ -13,6 +13,7 @@ import aiRouter from './src/routes/ai';
 import adminRouter from './src/routes/admin';
 import trackingRouter from './src/routes/tracking';
 import publicFormsRouter from './src/routes/publicForms';
+import authRouter from './src/routes/auth';
 import { startQueueWorker } from './src/services/queueWorker';
 import prisma from './src/db';
 
@@ -57,6 +58,7 @@ app.get('/api/system/public-config', async (req, res) => {
 // Mount Routes
 app.use('/api/track', trackingRouter);
 app.use('/api/public/forms', publicFormsRouter);
+app.use('/api/auth', authRouter);
 app.use('/api/templates', templatesRouter);
 app.use('/api/contacts', contactsRouter);
 app.use('/api/campaigns', campaignsRouter);

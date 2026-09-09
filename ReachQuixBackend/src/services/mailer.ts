@@ -107,6 +107,79 @@ export function interpolateVariables(template: string, vars: ContactVariables): 
   return result;
 }
 
+export function getPlatformVerificationSmtp(): SmtpConfig | null {
+  const host = process.env.VERIFICATION_SMTP_HOST?.trim();
+  const username = process.env.VERIFICATION_SMTP_USER?.trim();
+  const password = process.env.VERIFICATION_SMTP_PASS?.trim();
+  const port = Number(process.env.VERIFICATION_SMTP_PORT || 587);
+
+  if (!host || !username || !password || !Number.isFinite(port)) {
+    return null;
+  }
+
+  return {
+    host,
+    port,
+    username,
+    password,
+    use_ssl: process.env.VERIFICATION_SMTP_USE_SSL === 'true' || port === 465,
+    from_name: process.env.VERIFICATION_SMTP_FROM_NAME?.trim() || 'ReachQuix',
+    from_email: process.env.VERIFICATION_SMTP_FROM_EMAIL?.trim() || username,
+  };
+}
+
+/**
+ * Sends an account verification email via platform SMTP (better deliverability than Firebase default).
+ */
+export async function sendAccountVerificationEmail(options: {
+  to: string;
+  verificationLink: string;
+  displayName?: string | null;
+}): Promise<{ success: boolean; error?: string }> {
+  const smtp = getPlatformVerificationSmtp();
+  if (!smtp) {
+    return { success: false, error: 'Platform verification SMTP is not configured' };
+  }
+
+  try {
+    const transporter = createTransporter(smtp);
+    const fromAddress = smtp.from_email || smtp.username;
+    const fromName = smtp.from_name || 'ReachQuix';
+    const greeting = options.displayName?.trim() || 'there';
+
+    await transporter.sendMail({
+      from: `"${fromName}" <${fromAddress}>`,
+      to: options.to,
+      subject: 'Verify your ReachQuix email address',
+      text: `Hi ${greeting},\n\nPlease verify your email address to activate your ReachQuix account:\n\n${options.verificationLink}\n\nIf you did not create an account, you can ignore this email.\n\n— The ReachQuix Team`,
+      html: `
+        <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 580px; margin: 0 auto; padding: 32px 24px; background: #ffffff;">
+          <h1 style="color: #111827; font-size: 22px; margin: 0 0 16px;">Verify your email</h1>
+          <p style="color: #374151; font-size: 15px; line-height: 1.6; margin: 0 0 24px;">
+            Hi ${greeting},<br><br>
+            Thanks for signing up for ReachQuix. Click the button below to verify your email address and activate your account.
+          </p>
+          <a href="${options.verificationLink}" style="display: inline-block; background: #111827; color: #ffffff; text-decoration: none; padding: 12px 24px; border-radius: 999px; font-weight: 600; font-size: 14px;">
+            Verify email address
+          </a>
+          <p style="color: #6b7280; font-size: 13px; line-height: 1.6; margin: 24px 0 0;">
+            If the button does not work, copy and paste this link into your browser:<br>
+            <a href="${options.verificationLink}" style="color: #2563eb; word-break: break-all;">${options.verificationLink}</a>
+          </p>
+          <p style="color: #9ca3af; font-size: 12px; margin: 32px 0 0;">If you did not create a ReachQuix account, you can safely ignore this email.</p>
+        </div>
+      `,
+      headers: {
+        'X-Entity-Ref-ID': 'reachquix-verification',
+      },
+    });
+
+    return { success: true };
+  } catch (error: any) {
+    return { success: false, error: error.message || 'Failed to send verification email' };
+  }
+}
+
 /**
  * Sends a test email to verify end-to-end delivery
  */

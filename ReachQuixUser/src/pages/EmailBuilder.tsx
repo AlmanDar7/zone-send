@@ -111,6 +111,14 @@ const EmailBuilder = () => {
             html_body: buildLeadMagnetHtmlFromOrder(config),
           };
         }
+      } else {
+        const starter = getStarterTemplate("lead-magnet");
+        const config = starter.design_config as VisualTemplateConfig;
+        initialForm = {
+          ...initialForm,
+          design_config: config,
+          html_body: starter.html_body ?? buildLeadMagnetHtmlFromOrder(config),
+        };
       }
       setForm(initialForm);
       const next = new URLSearchParams(searchParams);
@@ -131,43 +139,32 @@ const EmailBuilder = () => {
 
   const saveMutation = useMutation({
     mutationFn: async ({ isNext = false }: { isNext?: boolean }) => {
-      if (selectedTemplate) {
-        const { data } = await api.templates.update(selectedTemplate.id, {
-          name: form.name,
-          subject: form.subject,
-          preview_text: form.preview_text,
-          body: form.body,
-          type: form.type,
-          category: form.category,
-          template_format: form.template_format,
-          html_body: form.html_body,
-          design_config: form.design_config,
-        });
-        return { data, isNext };
-      } else {
-        const { data } = await api.templates.create({
-          name: form.name,
-          subject: form.subject,
-          preview_text: form.preview_text,
-          body: form.body,
-          type: form.type,
-          category: form.category,
-          template_format: form.template_format,
-          html_body: form.html_body,
-          design_config: form.design_config,
-        });
-        return { data, isNext };
-      }
+      const payload = {
+        name: form.name,
+        subject: form.subject,
+        preview_text: form.preview_text,
+        body: form.body,
+        type: form.type,
+        category: form.category,
+        template_format: form.template_format,
+        html_body: form.html_body,
+        design_config: form.design_config,
+      };
+      const template = selectedTemplate
+        ? await api.templates.update(selectedTemplate.id, payload)
+        : await api.templates.create(payload);
+      return { template, isNext, wasNew: !selectedTemplate };
     },
-    onSuccess: ({ data, isNext }) => {
+    onSuccess: ({ template, isNext, wasNew }) => {
+      setSelectedTemplate(template);
       queryClient.invalidateQueries({ queryKey: ["templates"] });
       queryClient.invalidateQueries({ queryKey: ["templates-list"] });
-      toast.success(selectedTemplate ? "Template saved!" : "Template created!");
+      toast.success(wasNew ? "Template created!" : "Template saved!");
       
       if (isNext) {
-        navigate(`/campaigns/new?templateId=${data.id}`);
-      } else if (!selectedTemplate) {
-        navigate(`/emails/builder?edit=${data.id}`, { replace: true });
+        navigate(`/campaigns/new?templateId=${template.id}`);
+      } else if (wasNew) {
+        navigate(`/emails/builder?edit=${template.id}`, { replace: true });
       }
     },
     onError: (err: Error) => toast.error(err.message),

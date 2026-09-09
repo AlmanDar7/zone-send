@@ -14,7 +14,23 @@ import {
 } from "firebase/auth";
 import { getFirebaseAuth, getFirebaseApp } from "@/integrations/firebase/client";
 import { isFirebaseConfigured } from "@/integrations/firebase/config";
+import { api } from "@/lib/api";
 import type { AppUser } from "@/types/auth";
+
+async function sendVerificationViaBackend() {
+  try {
+    const result = await api.auth.sendVerification();
+    return result?.success === true;
+  } catch {
+    return false;
+  }
+}
+
+async function sendVerificationViaFirebase(user: FirebaseUser) {
+  await sendEmailVerification(user, {
+    url: `${window.location.origin}/verify-email`,
+  });
+}
 
 function requireFirebaseAuth() {
   if (!isFirebaseConfigured()) {
@@ -56,9 +72,10 @@ export async function signUpWithEmail(email: string, password: string) {
 
   await updateProfile(credential.user, { displayName: name }).catch(() => undefined);
 
-  await sendEmailVerification(credential.user, {
-    url: `${window.location.origin}/verify-email`,
-  });
+  const sentViaBackend = await sendVerificationViaBackend();
+  if (!sentViaBackend) {
+    await sendVerificationViaFirebase(credential.user);
+  }
 
   return mapFirebaseUser(credential.user);
 }
@@ -90,9 +107,10 @@ export async function signOutUser() {
 export async function sendVerificationEmail() {
   const auth = requireFirebaseAuth();
   if (!auth.currentUser) throw new Error("You must be signed in to resend verification email.");
-  await sendEmailVerification(auth.currentUser, {
-    url: `${window.location.origin}/verify-email`,
-  });
+  const sentViaBackend = await sendVerificationViaBackend();
+  if (!sentViaBackend) {
+    await sendVerificationViaFirebase(auth.currentUser);
+  }
 }
 
 export async function reloadCurrentUser(): Promise<AppUser | null> {

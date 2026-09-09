@@ -53,6 +53,61 @@ type FolderRow = any;
 
 const STEPS = ["Template", "From", "Subject", "Audience", "Send"];
 const TOTAL_STEPS = STEPS.length;
+const NO_COMPANY_COLUMN = "__none__";
+const UNMAPPED_COLUMN = "__unmapped__";
+
+/** Radix Select rejects empty string values — normalize headers from CSV/Excel uploads. */
+const normalizeCsvHeaders = (raw: string[]): string[] => {
+  const used = new Set<string>();
+  return raw.map((header, index) => {
+    let base = String(header ?? "").trim() || `Column ${index + 1}`;
+    let name = base;
+    let suffix = 2;
+    while (used.has(name)) {
+      name = `${base} (${suffix})`;
+      suffix += 1;
+    }
+    used.add(name);
+    return name;
+  });
+};
+
+const parseDelimitedRows = (text: string): string[][] =>
+  text
+    .split("\n")
+    .map((line) => {
+      const result: string[] = [];
+      let current = "";
+      let inQuotes = false;
+      for (const ch of line) {
+        if (ch === '"') {
+          inQuotes = !inQuotes;
+          continue;
+        }
+        if (ch === "," && !inQuotes) {
+          result.push(current.trim());
+          current = "";
+          continue;
+        }
+        current += ch;
+      }
+      result.push(current.trim());
+      return result;
+    })
+    .filter((r) => r.length > 0);
+
+const readSpreadsheetRows = async (file: File): Promise<string[][]> => {
+  const buffer = await file.arrayBuffer();
+  const isExcel = file.name.endsWith(".xlsx") || file.name.endsWith(".xls");
+
+  if (isExcel) {
+    const workbook = XLSX.read(buffer, { type: "array" });
+    const sheet = workbook.Sheets[workbook.SheetNames[0]];
+    return XLSX.utils.sheet_to_json(sheet, { header: 1, defval: "" }) as string[][];
+  }
+
+  return parseDelimitedRows(new TextDecoder().decode(buffer));
+};
 
 const isVisualTemplateConfig = (value: unknown): value is VisualTemplateConfig => {
   if (!value || typeof value !== "object") return false;
@@ -103,7 +158,7 @@ const CampaignWizard = () => {
   const [csvHeaders, setCsvHeaders] = useState<string[]>([]);
   const [nameColumn, setNameColumn] = useState("");
   const [emailColumn, setEmailColumn] = useState("");
-  const [companyColumn, setCompanyColumn] = useState("");
+  const [companyColumn, setCompanyColumn] = useState(NO_COMPANY_COLUMN);
   const [isParsing, setIsParsing] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const queryClient = useQueryClient();
@@ -216,7 +271,7 @@ const CampaignWizard = () => {
     setCsvHeaders([]);
     setNameColumn("");
     setEmailColumn("");
-    setCompanyColumn("");
+    setCompanyColumn(NO_COMPANY_COLUMN);
     setIsParsing(false);
     if (fileInputRef.current) fileInputRef.current.value = "";
   };
@@ -232,40 +287,17 @@ const CampaignWizard = () => {
     };
     setNameColumn(find(["name", "full name", "fullname", "first name", "last name"]));
     setEmailColumn(find(["email", "e-mail", "email address", "mail"]));
-    setCompanyColumn(find(["company", "organization", "org", "business", "company_name", "company name"]));
+    setCompanyColumn(find(["company", "organization", "org", "business", "company_name", "company name"]) || NO_COMPANY_COLUMN);
   };
 
   const parseFile = async (file: File) => {
     setIsParsing(true);
     try {
-      const buffer = await file.arrayBuffer();
-      const isExcel = file.name.endsWith(".xlsx") || file.name.endsWith(".xls");
-      let rows: any[] = [];
-      let headers: string[] = [];
-
-      if (isExcel) {
-        const workbook = XLSX.read(buffer, { type: "array" });
-        const sheet = workbook.Sheets[workbook.SheetNames[0]];
-        rows = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: "" }) as any[];
-      } else {
-        const text = new TextDecoder().decode(buffer);
-        rows = text.split("\n").map((line) => {
-          const result: string[] = [];
-          let current = "";
-          let inQuotes = false;
-          for (const ch of line) {
-            if (ch === '"') { inQuotes = !inQuotes; continue; }
-            if (ch === ',' && !inQuotes) { result.push(current.trim()); current = ""; continue; }
-            current += ch;
-          }
-          result.push(current.trim());
-          return result;
-        }).filter((r) => r.length > 0);
-      }
+      const rows = await readSpreadsheetRows(file);
 
       if (rows.length === 0) { toast.error("No data found in file"); setIsParsing(false); return; }
 
-      headers = rows[0].map((h: any) => String(h).trim());
+      const headers = normalizeCsvHeaders(rows[0].map((h) => String(h)));
       const previewRows = rows.slice(1, 6).map((r) => {
         const obj: Record<string, string> = {};
         headers.forEach((h, i) => { obj[h] = String(r[i] || "").trim(); });
@@ -287,36 +319,15 @@ const CampaignWizard = () => {
       if (!user) throw new Error("Not authenticated");
       if (!emailColumn) throw new Error("Please map the Email column");
 
-      let rows: any[] = [];
-      const buffer = await csvFile!.arrayBuffer();
-      const isExcel = csvFile!.name.endsWith(".xlsx") || csvFile!.name.endsWith(".xls");
-
-      if (isExcel) {
-        const workbook = XLSX.read(buffer, { type: "array" });
-        const sheet = workbook.Sheets[workbook.SheetNames[0]];
-        rows = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: "" }) as any[];
-      } else {
-        const text = new TextDecoder().decode(buffer);
-        rows = text.split("\n").map((line) => {
-          const result: string[] = [];
-          let current = "";
-          let inQuotes = false;
-          for (const ch of line) {
-            if (ch === '"') { inQuotes = !inQuotes; continue; }
-            if (ch === ',' && !inQuotes) { result.push(current.trim()); current = ""; continue; }
-            current += ch;
-          }
-          result.push(current.trim());
-          return result;
-        }).filter((r) => r.length > 0);
-      }
+      const rows = await readSpreadsheetRows(csvFile!);
+      const headers = normalizeCsvHeaders(rows[0].map((h) => String(h)));
 
       const headerIdx: Record<string, number> = {};
-      rows[0].forEach((h: any, i: number) => { headerIdx[String(h).trim()] = i; });
+      headers.forEach((h, i) => { headerIdx[h] = i; });
 
       const nameIdx = headerIdx[nameColumn];
       const emailIdx = headerIdx[emailColumn];
-      const companyIdx = companyColumn ? headerIdx[companyColumn] : -1;
+      const companyIdx = companyColumn && companyColumn !== NO_COMPANY_COLUMN ? headerIdx[companyColumn] : -1;
 
       const importRows = rows
         .slice(1)
@@ -330,12 +341,13 @@ const CampaignWizard = () => {
 
       if (importRows.length === 0) throw new Error("No valid contacts found");
 
-      const importedIds = await api.contacts.bulkCreate(
+      const importedContacts = await api.contacts.bulkCreate(
         importRows.map(r => ({ ...r, user_id: user.id }))
       );
-      return importedIds;
+      return importedContacts;
     },
-    onSuccess: (newIds: string[]) => {
+    onSuccess: (importedContacts: { id: string }[]) => {
+      const newIds = importedContacts.map((c) => c.id);
       queryClient.invalidateQueries({ queryKey: ["wizard-contacts"] });
       queryClient.invalidateQueries({ queryKey: ["contacts"] });
       // Auto-select newly imported contacts
@@ -473,14 +485,24 @@ const CampaignWizard = () => {
       if (recipientIds.length === 0) throw new Error("Select at least one recipient");
       const name = resolveCampaignName();
 
-      if (smtp?.id && (senderName || senderEmail)) {
+      const freshSmtp = await queryClient.fetchQuery({
+        queryKey: ["wizard-smtp", user.id],
+        queryFn: () => api.settings.smtp.get(),
+      });
+
+      if (freshSmtp?.id && (senderName || senderEmail)) {
         await api.settings.smtp.save({
-          from_name: senderName || smtp.from_name,
-          from_email: senderEmail || smtp.from_email,
+          from_name: senderName || freshSmtp.from_name,
+          from_email: senderEmail || freshSmtp.from_email,
         });
       }
       if (!subject) throw new Error("Subject required");
-      if (!hasUsableSmtpConfig(smtp)) throw new Error(getSmtpConfigError());
+
+      const smtpForSend = await queryClient.fetchQuery({
+        queryKey: ["wizard-smtp", user.id],
+        queryFn: () => api.settings.smtp.get(),
+      });
+      if (!hasUsableSmtpConfig(smtpForSend)) throw new Error(getSmtpConfigError());
 
       let scheduledAt = new Date();
       if (sendMode === "later") {
@@ -898,9 +920,13 @@ const CampaignWizard = () => {
                 <div className="grid gap-4 sm:grid-cols-3">
                   <div className="space-y-2">
                     <Label>Name column</Label>
-                    <Select value={nameColumn} onValueChange={setNameColumn}>
+                    <Select
+                      value={nameColumn || UNMAPPED_COLUMN}
+                      onValueChange={(v) => setNameColumn(v === UNMAPPED_COLUMN ? "" : v)}
+                    >
                       <SelectTrigger><SelectValue placeholder="Select column" /></SelectTrigger>
                       <SelectContent>
+                        <SelectItem value={UNMAPPED_COLUMN}>Select column</SelectItem>
                         {csvHeaders.map((h) => (
                           <SelectItem key={h} value={h}>{h}</SelectItem>
                         ))}
@@ -909,9 +935,13 @@ const CampaignWizard = () => {
                   </div>
                   <div className="space-y-2">
                     <Label>Email column <span className="text-destructive">*</span></Label>
-                    <Select value={emailColumn} onValueChange={setEmailColumn}>
+                    <Select
+                      value={emailColumn || UNMAPPED_COLUMN}
+                      onValueChange={(v) => setEmailColumn(v === UNMAPPED_COLUMN ? "" : v)}
+                    >
                       <SelectTrigger><SelectValue placeholder="Select column" /></SelectTrigger>
                       <SelectContent>
+                        <SelectItem value={UNMAPPED_COLUMN}>Select column</SelectItem>
                         {csvHeaders.map((h) => (
                           <SelectItem key={h} value={h}>{h}</SelectItem>
                         ))}
@@ -923,7 +953,7 @@ const CampaignWizard = () => {
                     <Select value={companyColumn} onValueChange={setCompanyColumn}>
                       <SelectTrigger><SelectValue placeholder="Select column" /></SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="">None</SelectItem>
+                        <SelectItem value={NO_COMPANY_COLUMN}>None</SelectItem>
                         {csvHeaders.map((h) => (
                           <SelectItem key={h} value={h}>{h}</SelectItem>
                         ))}
@@ -942,7 +972,9 @@ const CampaignWizard = () => {
                           <tr>
                             {nameColumn && <th className="px-3 py-2 text-left font-medium">Name</th>}
                             {emailColumn && <th className="px-3 py-2 text-left font-medium">Email</th>}
-                            {companyColumn && <th className="px-3 py-2 text-left font-medium">Company</th>}
+                            {companyColumn !== NO_COMPANY_COLUMN && (
+                              <th className="px-3 py-2 text-left font-medium">Company</th>
+                            )}
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-border">
@@ -950,7 +982,9 @@ const CampaignWizard = () => {
                             <tr key={i}>
                               {nameColumn && <td className="px-3 py-2">{row[nameColumn] || "—"}</td>}
                               {emailColumn && <td className="px-3 py-2">{row[emailColumn] || "—"}</td>}
-                              {companyColumn && <td className="px-3 py-2">{row[companyColumn] || "—"}</td>}
+                              {companyColumn !== NO_COMPANY_COLUMN && (
+                                <td className="px-3 py-2">{row[companyColumn] || "—"}</td>
+                              )}
                             </tr>
                           ))}
                         </tbody>

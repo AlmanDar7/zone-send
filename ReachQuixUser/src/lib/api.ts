@@ -53,7 +53,7 @@ export const api = {
     list: () => customFetch('/contacts'),
     create: (data: any) => customFetch('/contacts', { method: 'POST', body: JSON.stringify(data) }),
     bulkCreate: (data: any[]) => customFetch('/contacts/bulk', { method: 'POST', body: JSON.stringify({ contacts: data }) }),
-    bulkUpdate: (ids: string[], data: any) => customFetch('/contacts/bulk-update', { method: 'PUT', body: JSON.stringify({ ids, data }) }),
+    bulkUpdate: (ids: string[], data: any) => customFetch('/contacts/bulk-update', { method: 'PUT', body: JSON.stringify({ ids, updates: data }) }),
     delete: (id: string) => customFetch(`/contacts/${id}`, { method: 'DELETE' }),
     update: (id: string, data: any) => customFetch(`/contacts/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
     folders: {
@@ -134,5 +134,8 @@ export const api = {
     writeEmail: (data: { prompt: string; type?: string; tone?: string }) =>
       customFetch('/ai/write-email', { method: 'POST', body: JSON.stringify(data) }),
     syncGoogleSheets: () => customFetch('/ai/sync-google-sheets', { method: 'POST' }),
-  }
+  },
+  auth: {
+    sendVerification: () => customFetch('/auth/send-verification', { method: 'POST' }),
+  },
 };

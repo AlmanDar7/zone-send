@@ -89,7 +89,12 @@ const SettingsPage = () => {
 
   const saveSmtp = useMutation({
     mutationFn: upsertSmtpSettings,
-    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["smtp-settings"] }); toast.success("SMTP settings saved!"); },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["smtp-settings"] });
+      queryClient.invalidateQueries({ queryKey: ["wizard-smtp"] });
+      queryClient.invalidateQueries({ queryKey: ["campaigns-smtp"] });
+      toast.success("SMTP settings saved!");
+    },
     onError: (err: any) => toast.error(err.message),
   });
 
@@ -105,6 +110,8 @@ const SettingsPage = () => {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["smtp-settings"] });
+      queryClient.invalidateQueries({ queryKey: ["wizard-smtp"] });
+      queryClient.invalidateQueries({ queryKey: ["campaigns-smtp"] });
       toast.success(`Test email sent to ${testEmail.trim()}`);
     },
     onError: (err: any) => toast.error(err.message || "Failed to send test email"),
