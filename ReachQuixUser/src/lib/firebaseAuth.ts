@@ -5,6 +5,7 @@ import {
   sendEmailVerification,
   sendPasswordResetEmail,
   signInWithEmailAndPassword,
+  signInWithPopup,
   signInWithRedirect,
   getRedirectResult,
   signOut,
@@ -86,17 +87,36 @@ export async function signInWithEmail(email: string, password: string) {
   return mapFirebaseUser(credential.user);
 }
 
-export async function signInWithGoogle() {
+const isLocalDevHost = () => {
+  const host = window.location.hostname;
+  return host === "localhost" || host === "127.0.0.1";
+};
+
+export async function completeRedirectSignIn(): Promise<AppUser | null> {
+  if (!isFirebaseConfigured()) return null;
+  const auth = getFirebaseAuth();
+  const result = await getRedirectResult(auth);
+  return result?.user ? mapFirebaseUser(result.user) : null;
+}
+
+/** Popup on localhost avoids cross-domain redirect/session issues with custom auth domains. */
+export async function signInWithGoogle(): Promise<AppUser | null> {
   const auth = requireFirebaseAuth();
   const provider = new GoogleAuthProvider();
   provider.setCustomParameters({ prompt: "select_account" });
+
+  if (isLocalDevHost()) {
+    const credential = await signInWithPopup(auth, provider);
+    return mapFirebaseUser(credential.user);
+  }
+
   await signInWithRedirect(auth, provider);
+  return null;
 }
 
+/** @deprecated Prefer completeRedirectSignIn in AuthProvider */
 export async function checkRedirectResult() {
-  const auth = getFirebaseAuth();
-  const result = await getRedirectResult(auth);
-  return result ? mapFirebaseUser(result.user) : null;
+  return completeRedirectSignIn();
 }
 
 export async function signOutUser() {

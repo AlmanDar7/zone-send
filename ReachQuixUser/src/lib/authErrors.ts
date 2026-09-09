@@ -13,6 +13,10 @@ export function getOAuthErrorMessage(error: unknown): string {
     return "Google sign-in was cancelled.";
   }
 
+  if (lower.includes("popup-blocked")) {
+    return "Google sign-in popup was blocked. Allow popups for this site and try again.";
+  }
+
   if (lower.includes("firebase is not configured")) {
     return raw;
   }

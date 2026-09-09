@@ -4,6 +4,7 @@ import { api } from "@/lib/api";
 import { getFirebaseAuth } from "@/integrations/firebase/client";
 import { isFirebaseConfigured } from "@/integrations/firebase/config";
 import {
+  completeRedirectSignIn,
   mapFirebaseUser,
   signInWithEmail,
   signInWithGoogle,
@@ -55,17 +56,27 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     }
 
     const auth = getFirebaseAuth();
-    const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
-      const nextUser = firebaseUser ? mapFirebaseUser(firebaseUser) : null;
-      setUser(nextUser);
-      setLoading(false);
+    let unsubscribe = () => {};
 
-      if (nextUser) {
-        window.setTimeout(() => {
-          void ensureProfile(nextUser);
-        }, 0);
+    void (async () => {
+      try {
+        await completeRedirectSignIn();
+      } catch (err) {
+        console.error("Google redirect sign-in failed:", err);
       }
-    });
+
+      unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
+        const nextUser = firebaseUser ? mapFirebaseUser(firebaseUser) : null;
+        setUser(nextUser);
+        setLoading(false);
+
+        if (nextUser) {
+          window.setTimeout(() => {
+            void ensureProfile(nextUser);
+          }, 0);
+        }
+      });
+    })();
 
     return () => unsubscribe();
   }, []);
@@ -85,7 +96,11 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   };
 
   const signInWithGoogleHandler = async () => {
-    await signInWithGoogle();
+    const appUser = await signInWithGoogle();
+    if (appUser) {
+      setUser(appUser);
+      await ensureProfile(appUser);
+    }
   };
 
   const signOut = async () => {

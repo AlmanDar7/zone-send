@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
-import { requestPasswordReset, checkRedirectResult } from "@/lib/firebaseAuth";
+import { requestPasswordReset } from "@/lib/firebaseAuth";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -60,20 +60,6 @@ const Login = () => {
     }
   }, [authLoading, navigate, user]);
 
-  useEffect(() => {
-    const checkRedirect = async () => {
-      try {
-        setOauthLoading(true);
-        await checkRedirectResult();
-      } catch (error) {
-        toast.error(getOAuthErrorMessage(error));
-      } finally {
-        setOauthLoading(false);
-      }
-    };
-    checkRedirect();
-  }, []);
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
@@ -102,9 +88,10 @@ const Login = () => {
     setOauthLoading(true);
     try {
       await signInWithGoogle();
-      // Code won't reach here since the browser redirects
+      toast.success("Logged in successfully");
     } catch (error) {
       toast.error(getOAuthErrorMessage(error));
+    } finally {
       setOauthLoading(false);
     }
   };
